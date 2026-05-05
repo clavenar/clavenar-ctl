@@ -65,6 +65,9 @@ pub enum AgentsCommand {
     Transfer(TransferArgs),
     /// Update the free-text description.
     Description(DescriptionArgs),
+    /// Bulk-enroll legacy agents onto the registry (spec §7.3 / P5).
+    /// The official adoption path for the `Warn` → `Enforce` flip.
+    Migrate(crate::cmd::migrate::MigrateArgs),
 }
 
 #[derive(Debug, Args)]
@@ -230,6 +233,11 @@ pub async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitCode {
         AgentsCommand::Envelope(a) => envelope(a, &cfg, &url).await,
         AgentsCommand::Transfer(a) => transfer(a, &cfg, &url).await,
         AgentsCommand::Description(a) => description(a, &cfg, &url).await,
+        // `migrate` runs its own config/cred resolution (it needs the
+        // operator's `sub` claim from the cached id_token) — pass the
+        // global identity_url override through, not the resolved url
+        // we already computed, so the migrate cmd can re-derive it.
+        AgentsCommand::Migrate(a) => crate::cmd::migrate::run(a, Some(url.clone())).await,
     }
 }
 
@@ -353,6 +361,12 @@ async fn create(args: CreateArgs, cfg: &config::Config, url: &str) -> ExitCode {
         yellow_envelope: args.yellow_scope.clone(),
         attestation_kinds: args.attestation_kind.clone(),
         description: args.description.as_deref(),
+        // `wardenctl agents create` is the hand-driven path; the
+        // operator's own OIDC sub goes on the row. The migration CLI
+        // path is `wardenctl agents migrate` (cmd/migrate.rs) — that
+        // command sets `actor_sub` to `system:migration:<sub>` so the
+        // two paths leave distinguishable rows in the audit trail.
+        actor_sub: None,
     };
 
     if args.if_absent {
