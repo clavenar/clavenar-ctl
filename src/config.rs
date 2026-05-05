@@ -1,0 +1,138 @@
+//! `~/.warden/config.toml` — operator-level CLI defaults.
+//!
+//! Optional file at the OS-correct config dir (`directories` crate
+//! resolves it: `~/.warden/config.toml` on Linux/macOS,
+//! `%APPDATA%\warden\config.toml` on Windows). Carries a default
+//! identity URL and tenant so `wardenctl agents list` doesn't need to
+//! repeat them on every call. Per-call CLI flags and env vars override
+//! the file.
+//!
+//! This is *not* a place for sensitive data — bearer tokens live in the
+//! companion [`crate::credentials`] file, which is `0600` on Unix.
+//! `config.toml` can be group-readable.
+//!
+//! Resolution order for `identity_url` and `default_tenant` (highest
+//! priority first):
+//!
+//! 1. Per-call `--identity-url` / `--tenant` flag.
+//! 2. `WARDEN_IDENTITY_URL` / `WARDEN_TENANT` env var.
+//! 3. `config.toml`.
+//! 4. Built-in default (`identity_url` only — `http://localhost:8086`).
+//! 5. Boot failure (no `default_tenant` and none on the call site).
+
+use anyhow::{Context, Result};
+use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct Config {
+    /// Identity service base URL. Defaults to
+    /// `http://localhost:8086` if unset everywhere.
+    pub identity_url: Option<String>,
+    /// Default tenant for `--tenant`-taking commands. The CLI prefers
+    /// to fail loudly on missing tenant rather than silently picking
+    /// one — this entry is opt-in.
+    pub default_tenant: Option<String>,
+}
+
+/// Resolve the on-disk config-file path. Idempotent — does NOT touch
+/// the filesystem (creation is the caller's job, on save).
+pub fn config_path() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("dev", "agent-warden", "warden")
+        .context("could not resolve OS config dir for warden")?;
+    Ok(dirs.config_dir().join("config.toml"))
+}
+
+/// Load the config file, returning [`Config::default`] if it doesn't
+/// exist. A malformed file errors loudly (we'd rather surface the
+/// operator's typo than silently fall through to defaults).
+pub fn load() -> Result<Config> {
+    let path = config_path()?;
+    if !path.exists() {
+        return Ok(Config::default());
+    }
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("read {}", path.display()))?;
+    let cfg: Config = toml::from_str(&body)
+        .with_context(|| format!("parse {}", path.display()))?;
+    Ok(cfg)
+}
+
+/// Resolve the identity URL using the spec'd precedence chain.
+/// `cli_override` is the per-call `--identity-url` flag; `env_override`
+/// is the captured `WARDEN_IDENTITY_URL` value.
+pub fn resolve_identity_url(
+    cli_override: Option<&str>,
+    env_override: Option<&str>,
+    cfg: &Config,
+) -> String {
+    cli_override
+        .map(str::to_string)
+        .or_else(|| env_override.map(str::to_string))
+        .or_else(|| cfg.identity_url.clone())
+        .unwrap_or_else(|| "http://localhost:8086".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg_with(url: Option<&str>) -> Config {
+        Config {
+            identity_url: url.map(str::to_string),
+            default_tenant: None,
+        }
+    }
+
+    #[test]
+    fn cli_override_wins_over_env_and_file() {
+        let cfg = cfg_with(Some("http://from-file:8086"));
+        assert_eq!(
+            resolve_identity_url(
+                Some("http://from-cli:9999"),
+                Some("http://from-env:7777"),
+                &cfg
+            ),
+            "http://from-cli:9999"
+        );
+    }
+
+    #[test]
+    fn env_override_wins_over_file() {
+        let cfg = cfg_with(Some("http://from-file:8086"));
+        assert_eq!(
+            resolve_identity_url(None, Some("http://from-env:7777"), &cfg),
+            "http://from-env:7777"
+        );
+    }
+
+    #[test]
+    fn file_used_when_no_cli_or_env() {
+        let cfg = cfg_with(Some("http://from-file:8086"));
+        assert_eq!(
+            resolve_identity_url(None, None, &cfg),
+            "http://from-file:8086"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_localhost_default() {
+        let cfg = cfg_with(None);
+        assert_eq!(
+            resolve_identity_url(None, None, &cfg),
+            "http://localhost:8086"
+        );
+    }
+
+    #[test]
+    fn parses_complete_toml() {
+        let s = r#"
+            identity_url = "http://identity.test:8086"
+            default_tenant = "acme"
+        "#;
+        let cfg: Config = toml::from_str(s).unwrap();
+        assert_eq!(cfg.identity_url.as_deref(), Some("http://identity.test:8086"));
+        assert_eq!(cfg.default_tenant.as_deref(), Some("acme"));
+    }
+}
