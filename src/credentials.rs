@@ -63,8 +63,16 @@ pub struct Credentials {
     pub tenants: BTreeMap<String, TenantCredential>,
 }
 
-/// Resolve the on-disk credentials file path.
+/// Resolve the on-disk credentials file path. `WARDEN_CREDENTIALS_PATH`
+/// overrides — used by the e2e runner so tests don't pollute the
+/// developer's `~/.warden/credentials.json`. When the env var is unset,
+/// fall back to `ProjectDirs` (Linux: `~/.config/warden/credentials.json`,
+/// macOS: `~/Library/Application Support/dev.agent-warden.warden/...`,
+/// Windows: `%APPDATA%/warden/...`).
 pub fn credentials_path() -> Result<PathBuf> {
+    if let Ok(p) = std::env::var("WARDEN_CREDENTIALS_PATH") {
+        return Ok(PathBuf::from(p));
+    }
     let dirs = ProjectDirs::from("dev", "agent-warden", "warden")
         .context("could not resolve OS config dir for warden")?;
     Ok(dirs.config_dir().join("credentials.json"))
