@@ -1,0 +1,170 @@
+//! `wardenctl` — operator CLI for Agent Warden (ONBOARDING.md §9).
+//!
+//! Sibling crate to `warden-sdk`; the SDK is the typed library
+//! (consumed by `warden-console` and integrators), this binary is the
+//! human-facing CLI. Single artifact, single source of truth: every
+//! `wardenctl` subcommand calls into a `warden-sdk` client.
+//!
+//! P1 surface (this commit):
+//!
+//! ```text
+//! wardenctl auth login   --tenant <T> --token-file <PATH>
+//! wardenctl auth login   --tenant <T> --token-stdin
+//! wardenctl auth logout
+//! wardenctl auth whoami  [--json]
+//! wardenctl agents list  --tenant <T> [--state ...] [--owner-team ...] [--json]
+//! wardenctl agents get   <ID> --tenant <T> [--json]
+//! ```
+//!
+//! Device-authorization-grant flow (RFC 8628) is *not* in P1 — it
+//! lands with the dex mock in P4 where the e2e runner wires a real
+//! IdP. Until then `auth login` accepts a pre-minted id_token via
+//! `--token-file` or `--token-stdin`, which is also the workaround
+//! the spec's §13 test plan uses against dex.
+//!
+//! Exit codes (per spec §9.3):
+//!
+//! ```text
+//! 0 — success
+//! 2 — validation error (bad CLI args, malformed body)
+//! 3 — auth / capability error (401, 403)
+//! 4 — conflict (409, e.g. agent_name_taken / decommissioned)
+//! 5 — server error (5xx, transport, decode)
+//! ```
+
+mod cmd;
+mod config;
+mod credentials;
+
+use clap::{Parser, Subcommand};
+
+/// `wardenctl` — operator CLI for Agent Warden.
+#[derive(Debug, Parser)]
+#[command(name = "wardenctl", version, about)]
+struct Cli {
+    /// Override the default identity service base URL. Falls back to
+    /// `WARDEN_IDENTITY_URL` and then `~/.warden/config.toml`'s
+    /// `identity_url`. Useful when shipping a binary against a non-prod
+    /// identity instance without rewriting the config file.
+    #[arg(long, global = true)]
+    identity_url: Option<String>,
+
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Authenticate against `warden-identity`, manage cached creds.
+    Auth(cmd::auth::AuthArgs),
+    /// Read-only access to the registered agents table (P1). Writes
+    /// land in P2.
+    Agents(cmd::agents::AgentsArgs),
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("wardenctl=info")),
+        )
+        .init();
+
+    let cli = Cli::parse();
+    let exit = run(cli).await;
+    std::process::exit(exit.code());
+}
+
+/// Top-level dispatcher. Returns an [`ExitCode`] so each subcommand can
+/// surface a typed exit per spec §9.3 without threading a process exit
+/// through `?`.
+async fn run(cli: Cli) -> ExitCode {
+    match cli.command {
+        Command::Auth(args) => cmd::auth::run(args, cli.identity_url).await,
+        Command::Agents(args) => cmd::agents::run(args, cli.identity_url).await,
+    }
+}
+
+/// Spec §9.3 deterministic exit codes. Mapped to the kind of error,
+/// not the kind of HTTP status — auth-layer (401/403) collapses to 3,
+/// schema-shape (400/422) collapses to 2, etc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExitCode {
+    Ok,
+    Validation,
+    Auth,
+    Conflict,
+    Server,
+}
+
+impl ExitCode {
+    /// The actual integer the process exits with.
+    pub fn code(self) -> i32 {
+        match self {
+            ExitCode::Ok => 0,
+            ExitCode::Validation => 2,
+            ExitCode::Auth => 3,
+            ExitCode::Conflict => 4,
+            ExitCode::Server => 5,
+        }
+    }
+
+    /// Map a [`warden_sdk::WardenError`] onto the right exit code.
+    /// Centralizes the mapping so subcommands don't duplicate the
+    /// status-classification logic. The 4xx fan-out matches the spec's
+    /// auth/conflict/validation split.
+    pub fn from_warden_error(err: &warden_sdk::WardenError) -> Self {
+        use warden_sdk::WardenError as E;
+        match err {
+            E::Unauthorized(_) => ExitCode::Auth,
+            E::BadRequest(_) => ExitCode::Validation,
+            E::InvalidConfig(_) => ExitCode::Validation,
+            E::Veto { .. } => ExitCode::Auth,
+            E::Server { status, .. } => match status.as_u16() {
+                401 => ExitCode::Auth,
+                403 => ExitCode::Auth,
+                404 => ExitCode::Validation,
+                409 => ExitCode::Conflict,
+                422 => ExitCode::Validation,
+                _ => ExitCode::Server,
+            },
+            E::Transport(_) | E::Decode(_) => ExitCode::Server,
+            // `WardenError` is `#[non_exhaustive]` — future variants
+            // collapse to Server until we explicitly classify them. A
+            // panic-on-unknown would be wrong on a CLI exit path.
+            _ => ExitCode::Server,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exit_code_classifies_warden_error() {
+        // Single source of truth for the spec §9.3 mapping.
+        let unauth = warden_sdk::WardenError::Unauthorized("bad token".into());
+        assert_eq!(ExitCode::from_warden_error(&unauth), ExitCode::Auth);
+
+        let bad = warden_sdk::WardenError::BadRequest("malformed body".into());
+        assert_eq!(ExitCode::from_warden_error(&bad), ExitCode::Validation);
+
+        let conflict = warden_sdk::WardenError::Server {
+            status: reqwest::StatusCode::CONFLICT,
+            body: "agent_name_taken".into(),
+        };
+        assert_eq!(ExitCode::from_warden_error(&conflict), ExitCode::Conflict);
+
+        let server = warden_sdk::WardenError::Server {
+            status: reqwest::StatusCode::SERVICE_UNAVAILABLE,
+            body: "infra down".into(),
+        };
+        assert_eq!(ExitCode::from_warden_error(&server), ExitCode::Server);
+
+        let cfg = warden_sdk::WardenError::InvalidConfig("bad url".into());
+        assert_eq!(ExitCode::from_warden_error(&cfg), ExitCode::Validation);
+    }
+}
