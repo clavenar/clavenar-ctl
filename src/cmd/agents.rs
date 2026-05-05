@@ -1,21 +1,39 @@
-//! `wardenctl agents` — read-only access to the agents table (P1).
+//! `wardenctl agents` — full read + write access to the agents table.
 //!
-//! Two subcommands:
+//! P2 surface (this commit) wires the lifecycle write commands on top
+//! of P1's read-only foundation:
 //!
 //! ```text
-//! wardenctl agents list  --tenant <T> [--state ...] [--owner-team ...] [--json]
-//! wardenctl agents get   <ID> --tenant <T> [--json]
+//! wardenctl agents list   --tenant <T> [--state …] [--owner-team …] [--json]
+//! wardenctl agents get    <ID> --tenant <T> [--json]
+//! wardenctl agents create --tenant <T> --name <N> --owner-team <T>
+//!                         [--scope <S>...] [--yellow-scope <S>...]
+//!                         [--attestation-kind <K>...] [--description <T>]
+//!                         [--if-absent] [--json]
+//! wardenctl agents suspend       <ID> --tenant <T> [--reason …]
+//! wardenctl agents unsuspend     <ID> --tenant <T> [--reason …]
+//! wardenctl agents decommission  <ID> --tenant <T> [--reason …]
+//! wardenctl agents envelope narrow <ID> --tenant <T> [--scope …]... [--yellow-scope …]...
+//! wardenctl agents envelope widen  <ID> --tenant <T> [--scope …]... [--yellow-scope …]...
+//! wardenctl agents transfer    <ID> --tenant <T> --to-team <T>
+//! wardenctl agents description <ID> --tenant <T> --text "…"
 //! ```
 //!
-//! Both are thin wrappers around [`warden_sdk::AgentsClient`]. Auth
-//! comes from the cached credentials at `~/.warden/credentials.json`
-//! (managed by `wardenctl auth login`); a missing entry exits 3.
+//! All paths share the same auth, exit-code, and tenant-resolution
+//! plumbing: bearer comes from the cached creds at
+//! `~/.warden/credentials.json`; tenant defaults to flag → env →
+//! config; exit codes follow spec §9.3 via
+//! [`crate::ExitCode::from_warden_error`].
 //!
-//! Writes (`create`, `suspend`, …) ship in P2 alongside the
-//! identity-side lifecycle handlers.
+//! `--if-absent` on `create` is the IaC-without-Terraform pattern: a
+//! pre-fetch by `(tenant, agent_name)` decides whether to POST. On a
+//! match, exit 0; on a mismatch, exit 4 (conflict) without writing.
 
 use clap::{Args, Subcommand};
-use warden_sdk::{AgentListFilter, AgentRecord, AgentState, AgentsClient};
+use warden_sdk::{
+    create_request_matches, AgentListFilter, AgentRecord, AgentState, AgentsClient,
+    CreateAgentRequest, EnvelopeRequest,
+};
 
 use crate::config;
 use crate::credentials;
@@ -33,6 +51,20 @@ pub enum AgentsCommand {
     List(ListArgs),
     /// Look up one agent by id.
     Get(GetArgs),
+    /// Register a new agent (spec §5.2).
+    Create(CreateArgs),
+    /// Pause an agent — owner-team or admin (spec §5.1).
+    Suspend(LifecycleArgs),
+    /// Unpause a suspended agent — admin only.
+    Unsuspend(LifecycleArgs),
+    /// Decommission an agent (terminal). Admin only.
+    Decommission(LifecycleArgs),
+    /// Narrow / widen the capability envelope.
+    Envelope(EnvelopeArgs),
+    /// Transfer the owner team. Admin only.
+    Transfer(TransferArgs),
+    /// Update the free-text description.
+    Description(DescriptionArgs),
 }
 
 #[derive(Debug, Args)]
@@ -64,6 +96,117 @@ pub struct GetArgs {
     pub json: bool,
 }
 
+#[derive(Debug, Args)]
+pub struct CreateArgs {
+    #[arg(long)]
+    pub tenant: Option<String>,
+    /// Agent name. Must be unique within `(tenant, agent_name)` —
+    /// even Decommissioned rows count, the spec forbids name reuse.
+    #[arg(long)]
+    pub name: String,
+    /// Owner team. Must be a group the caller's `id_token` carries.
+    #[arg(long = "owner-team")]
+    pub owner_team: String,
+    /// Capability envelope, repeatable. `--scope mcp:read:tickets
+    /// --scope mcp:write:tickets`.
+    #[arg(long = "scope")]
+    pub scope: Vec<String>,
+    /// Yellow-tier capability envelope, repeatable.
+    #[arg(long = "yellow-scope")]
+    pub yellow_scope: Vec<String>,
+    /// Attestation kinds the platform should accept for this agent.
+    /// Repeatable. Empty = inherit the global allowlist.
+    #[arg(long = "attestation-kind")]
+    pub attestation_kind: Vec<String>,
+    /// Free-text description (≤ ~1KB recommended).
+    #[arg(long)]
+    pub description: Option<String>,
+    /// Idempotent IaC mode: if a row at `(tenant, agent_name)`
+    /// already matches the requested envelope/owner_team/kinds, exit
+    /// 0 without re-POSTing. On mismatch, exit 4 without writing —
+    /// the operator is expected to converge manually.
+    #[arg(long = "if-absent")]
+    pub if_absent: bool,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct LifecycleArgs {
+    /// Agent uuidv7.
+    pub id: String,
+    #[arg(long)]
+    pub tenant: Option<String>,
+    /// Free-text reason. Lands on the chain v3 payload (P3) and the
+    /// forensic event today (P2).
+    #[arg(long)]
+    pub reason: Option<String>,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct EnvelopeArgs {
+    #[command(subcommand)]
+    pub direction: EnvelopeDirection,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum EnvelopeDirection {
+    /// Narrow the envelope (owner-team or admin). Pass the *full new
+    /// envelope* — the server diffs against the current row.
+    Narrow(EnvelopeChangeArgs),
+    /// Widen the envelope (admin only). Same shape as narrow.
+    Widen(EnvelopeChangeArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct EnvelopeChangeArgs {
+    pub id: String,
+    #[arg(long)]
+    pub tenant: Option<String>,
+    /// New scope envelope, repeatable. Pass *all* the scopes you
+    /// want post-change; missing flags are silently the same as
+    /// `[]`.
+    #[arg(long = "scope")]
+    pub scope: Vec<String>,
+    /// New yellow-tier envelope, repeatable.
+    #[arg(long = "yellow-scope")]
+    pub yellow_scope: Vec<String>,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct TransferArgs {
+    pub id: String,
+    #[arg(long)]
+    pub tenant: Option<String>,
+    /// New owning team. Spec §15 — receiving-team consent is out of
+    /// scope; admin can assign to any non-empty label.
+    #[arg(long = "to-team")]
+    pub to_team: String,
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct DescriptionArgs {
+    pub id: String,
+    #[arg(long)]
+    pub tenant: Option<String>,
+    /// New description text. Empty string is rejected upstream —
+    /// pass `--clear` to remove the description entirely (the body
+    /// sets it to JSON null).
+    #[arg(long)]
+    pub text: Option<String>,
+    /// Clear the description. Mutually exclusive with `--text`.
+    #[arg(long, conflicts_with = "text")]
+    pub clear: bool,
+    #[arg(long)]
+    pub json: bool,
+}
+
 pub async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitCode {
     let cfg = match config::load() {
         Ok(c) => c,
@@ -78,7 +221,23 @@ pub async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitCode {
     match args.command {
         AgentsCommand::List(a) => list(a, &cfg, &url).await,
         AgentsCommand::Get(a) => get(a, &cfg, &url).await,
+        AgentsCommand::Create(a) => create(a, &cfg, &url).await,
+        AgentsCommand::Suspend(a) => lifecycle(a, &cfg, &url, LifecycleVerb::Suspend).await,
+        AgentsCommand::Unsuspend(a) => lifecycle(a, &cfg, &url, LifecycleVerb::Unsuspend).await,
+        AgentsCommand::Decommission(a) => {
+            lifecycle(a, &cfg, &url, LifecycleVerb::Decommission).await
+        }
+        AgentsCommand::Envelope(a) => envelope(a, &cfg, &url).await,
+        AgentsCommand::Transfer(a) => transfer(a, &cfg, &url).await,
+        AgentsCommand::Description(a) => description(a, &cfg, &url).await,
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LifecycleVerb {
+    Suspend,
+    Unsuspend,
+    Decommission,
 }
 
 /// Resolve `--tenant` against the precedence chain: flag → env →
@@ -166,6 +325,258 @@ async fn get(args: GetArgs, cfg: &config::Config, url: &str) -> ExitCode {
                 println!("{}", serde_json::to_string_pretty(&record).unwrap());
             } else {
                 print_record(&record);
+            }
+            ExitCode::Ok
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from_warden_error(&e)
+        }
+    }
+}
+
+async fn create(args: CreateArgs, cfg: &config::Config, url: &str) -> ExitCode {
+    let tenant = match resolve_tenant(args.tenant.clone(), cfg) {
+        Ok(t) => t,
+        Err(c) => return c,
+    };
+    let client = match build_client(url, &tenant) {
+        Ok(c) => c,
+        Err(c) => return c,
+    };
+
+    let req = CreateAgentRequest {
+        tenant: tenant.as_str(),
+        agent_name: args.name.as_str(),
+        owner_team: args.owner_team.as_str(),
+        scope_envelope: args.scope.clone(),
+        yellow_envelope: args.yellow_scope.clone(),
+        attestation_kinds: args.attestation_kind.clone(),
+        description: args.description.as_deref(),
+    };
+
+    if args.if_absent {
+        // Pre-fetch by `(tenant, agent_name)`. If the row exists and
+        // matches, exit 0; if it exists but differs, exit 4 (conflict)
+        // without writing. The latter is intentional — the spec calls
+        // out IaC patterns expect operator intervention on drift.
+        match client.find_by_name(&tenant, &args.name).await {
+            Ok(Some(existing)) => {
+                if create_request_matches(&req, &existing) {
+                    if args.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "status": "matched",
+                                "id": existing.id,
+                            }))
+                            .unwrap()
+                        );
+                    } else {
+                        println!("agent '{}' already matches (id {})", args.name, existing.id);
+                    }
+                    return ExitCode::Ok;
+                }
+                eprintln!(
+                    "error: agent '{}' exists with a different envelope/owner_team/kinds; \
+                     reconcile manually",
+                    args.name
+                );
+                return ExitCode::Conflict;
+            }
+            Ok(None) => {
+                // Fall through to the regular create path below.
+            }
+            Err(e) => {
+                eprintln!("error: pre-fetch failed: {e}");
+                return ExitCode::from_warden_error(&e);
+            }
+        }
+    }
+
+    match client.create(&req).await {
+        Ok(created) => {
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&created).unwrap());
+            } else {
+                println!(
+                    "registered agent '{}' (id {}, state {})",
+                    created.record.agent_name,
+                    created.record.id,
+                    created.record.state.as_wire()
+                );
+                println!("spiffe_id_pattern: {}", created.spiffe_id_pattern);
+            }
+            ExitCode::Ok
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from_warden_error(&e)
+        }
+    }
+}
+
+async fn lifecycle(
+    args: LifecycleArgs,
+    cfg: &config::Config,
+    url: &str,
+    verb: LifecycleVerb,
+) -> ExitCode {
+    let tenant = match resolve_tenant(args.tenant, cfg) {
+        Ok(t) => t,
+        Err(c) => return c,
+    };
+    let client = match build_client(url, &tenant) {
+        Ok(c) => c,
+        Err(c) => return c,
+    };
+    let result = match verb {
+        LifecycleVerb::Suspend => client.suspend(&args.id, &tenant, args.reason.as_deref()).await,
+        LifecycleVerb::Unsuspend => {
+            client.unsuspend(&args.id, &tenant, args.reason.as_deref()).await
+        }
+        LifecycleVerb::Decommission => {
+            client
+                .decommission(&args.id, &tenant, args.reason.as_deref())
+                .await
+        }
+    };
+    match result {
+        Ok(resp) => {
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&resp).unwrap());
+            } else {
+                println!(
+                    "agent {} → {} (changed at {})",
+                    args.id,
+                    resp.state.as_wire(),
+                    resp.state_changed_at
+                );
+            }
+            ExitCode::Ok
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from_warden_error(&e)
+        }
+    }
+}
+
+async fn envelope(args: EnvelopeArgs, cfg: &config::Config, url: &str) -> ExitCode {
+    let (id, tenant_arg, scope, yellow, json_out, direction) = match args.direction {
+        EnvelopeDirection::Narrow(a) => (
+            a.id,
+            a.tenant,
+            a.scope,
+            a.yellow_scope,
+            a.json,
+            EnvelopeDirectionRaw::Narrow,
+        ),
+        EnvelopeDirection::Widen(a) => (
+            a.id,
+            a.tenant,
+            a.scope,
+            a.yellow_scope,
+            a.json,
+            EnvelopeDirectionRaw::Widen,
+        ),
+    };
+    let tenant = match resolve_tenant(tenant_arg, cfg) {
+        Ok(t) => t,
+        Err(c) => return c,
+    };
+    let client = match build_client(url, &tenant) {
+        Ok(c) => c,
+        Err(c) => return c,
+    };
+    let env = EnvelopeRequest {
+        scope_envelope: &scope,
+        yellow_envelope: &yellow,
+    };
+    let result = match direction {
+        EnvelopeDirectionRaw::Narrow => client.envelope_narrow(&id, &tenant, env).await,
+        EnvelopeDirectionRaw::Widen => client.envelope_widen(&id, &tenant, env).await,
+    };
+    match result {
+        Ok(record) => {
+            if json_out {
+                println!("{}", serde_json::to_string_pretty(&record).unwrap());
+            } else {
+                print_record(&record);
+            }
+            ExitCode::Ok
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from_warden_error(&e)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum EnvelopeDirectionRaw {
+    Narrow,
+    Widen,
+}
+
+async fn transfer(args: TransferArgs, cfg: &config::Config, url: &str) -> ExitCode {
+    let tenant = match resolve_tenant(args.tenant, cfg) {
+        Ok(t) => t,
+        Err(c) => return c,
+    };
+    let client = match build_client(url, &tenant) {
+        Ok(c) => c,
+        Err(c) => return c,
+    };
+    match client
+        .transfer_owner_team(&args.id, &tenant, &args.to_team)
+        .await
+    {
+        Ok(record) => {
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&record).unwrap());
+            } else {
+                println!("agent {} owner_team → {}", args.id, record.owner_team);
+            }
+            ExitCode::Ok
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from_warden_error(&e)
+        }
+    }
+}
+
+async fn description(args: DescriptionArgs, cfg: &config::Config, url: &str) -> ExitCode {
+    let tenant = match resolve_tenant(args.tenant, cfg) {
+        Ok(t) => t,
+        Err(c) => return c,
+    };
+    let client = match build_client(url, &tenant) {
+        Ok(c) => c,
+        Err(c) => return c,
+    };
+    let text = if args.clear {
+        None
+    } else {
+        match args.text.as_deref() {
+            Some("") | None => {
+                eprintln!("error: pass --text \"…\" or --clear to remove the description");
+                return ExitCode::Validation;
+            }
+            Some(t) => Some(t),
+        }
+    };
+    match client.set_description(&args.id, &tenant, text).await {
+        Ok(record) => {
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&record).unwrap());
+            } else {
+                println!(
+                    "agent {} description: {}",
+                    args.id,
+                    record.description.as_deref().unwrap_or("(cleared)")
+                );
             }
             ExitCode::Ok
         }
