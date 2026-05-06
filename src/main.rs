@@ -60,6 +60,9 @@ enum Command {
     /// Read-only access to the registered agents table (P1). Writes
     /// land in P2.
     Agents(cmd::agents::AgentsArgs),
+    /// Regulatory exports (E6 slice 3): produce EU-AI-Act bundles
+    /// from the ledger over a time window.
+    Regulatory(cmd::regulatory::RegulatoryArgs),
 }
 
 #[tokio::main]
@@ -84,6 +87,9 @@ async fn run(cli: Cli) -> ExitCode {
     match cli.command {
         Command::Auth(args) => cmd::auth::run(args, cli.identity_url).await,
         Command::Agents(args) => cmd::agents::run(args, cli.identity_url).await,
+        // `regulatory` doesn't take an --identity-url; it talks
+        // directly to the ledger (no agent-registry gate today).
+        Command::Regulatory(args) => cmd::regulatory::run(args).await,
     }
 }
 
