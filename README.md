@@ -13,9 +13,12 @@ you run `wardenctl ...`.
 
 ## Status
 
-Currently shipping the read-only surface from
-[`ONBOARDING.md`](https://github.com/vanteguardlabs/warden-specs/blob/main/ONBOARDING.md)
-P1:
+`ONBOARDING.md` P1–P5 read + write surfaces all shipped. The full RFC
+8628 device-authorization-grant flow remains the open item — it lands
+once the dex mock IdP is wired in `warden-e2e`; until then, supply the
+`id_token` via `--token-file` or `--token-stdin`.
+
+Read surface:
 
 ```sh
 wardenctl auth login   --tenant <T> --token-file <PATH>
@@ -26,11 +29,33 @@ wardenctl agents list  --tenant <T> [--state ...] [--owner-team ...] [--json]
 wardenctl agents get   <ID> --tenant <T> [--json]
 ```
 
-Writes (`create`, `suspend`, `unsuspend`, `decommission`, `envelope
-narrow|widen`, `transfer`, `description`) ship in P2 alongside the
-identity-side lifecycle handlers. Migration (`migrate --dry-run`) ships
-in P5. The full RFC 8628 device-authorization-grant flow lands in P4
-when the dex mock IdP is wired in `warden-e2e`.
+Write surface (lifecycle, all wired through the SDK):
+
+```sh
+wardenctl agents create        --tenant <T> --name <N> --owner-team <T> \
+                               --scope <S>... --yellow-scope <S>... \
+                               --attestation-kind <K>... [--description <D>] [--if-absent]
+wardenctl agents suspend       <ID> --tenant <T> [--reason <R>]
+wardenctl agents unsuspend     <ID> --tenant <T> [--reason <R>]
+wardenctl agents decommission  <ID> --tenant <T> [--reason <R>]
+wardenctl agents envelope narrow <ID> --tenant <T> --scope <S>... --yellow-scope <S>...
+wardenctl agents envelope widen  <ID> --tenant <T> --scope <S>... --yellow-scope <S>...
+wardenctl agents transfer      <ID> --tenant <T> --to-team <T>
+wardenctl agents description   <ID> --tenant <T> --text <D>
+```
+
+Migration (P5):
+
+```sh
+wardenctl agents migrate \
+  --identity-db /var/lib/warden-identity/identity.sqlite \
+  [--dry-run] [--default-owner-team unassigned] \
+  [--default-envelope '*'] [--default-attestation-kinds '*']
+```
+
+The migration command anchors `agent.registered` chain v3 rows with
+`actor_sub = system:migration:<operator_oidc_sub>` so the chain
+records the human who ran the bulk enrollment.
 
 ## Install
 
