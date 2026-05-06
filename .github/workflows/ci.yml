@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    name: cargo check / test / clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Sibling-checkout: warden-ctl declares warden-sdk as a path dep
+      # ("../warden-sdk") because all repos sit as siblings under
+      # repos/ in local dev. CI gets only one repo by default, so we
+      # clone the sibling into the same relative location. Requires a
+      # WARDEN_REPO_TOKEN secret: a fine-grained PAT with Contents:Read
+      # on vanteguardlabs/warden-sdk. actions/checkout's `path` is
+      # restricted to inside the workspace, so we use `gh repo clone`
+      # directly to land outside it.
+      - name: checkout warden-sdk sibling
+        env:
+          GH_TOKEN: ${{ secrets.WARDEN_REPO_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::WARDEN_REPO_TOKEN secret not set. Create a fine-grained PAT with Contents:Read on vanteguardlabs/warden-sdk and add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          gh repo clone vanteguardlabs/warden-sdk ../warden-sdk -- --depth 1
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: cargo test
+        run: cargo test
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
