@@ -1,5 +1,5 @@
 //! `wardenctl agents migrate` — bulk-enroll existing SVID-only agents
-//! onto the registered-agents table (ONBOARDING.md §7.3, §13.1.7).
+//! onto the registered-agents table (warden-specs/TECH_SPEC.md#agent-onboarding-wao §7.3, §13.1.7).
 //!
 //! Migration deliverable. The migration command is the official adoption path
 //! for the mode flip from `Warn` to `Enforce`: an operator runs
