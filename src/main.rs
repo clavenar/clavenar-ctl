@@ -1,4 +1,4 @@
-//! `wardenctl` — operator CLI for Agent Warden (ONBOARDING.md §9).
+//! `wardenctl` — operator CLI for Agent Warden (warden-specs/TECH_SPEC.md#agent-onboarding-wao §9).
 //!
 //! Sibling crate to `warden-sdk`; the SDK is the typed library
 //! (consumed by `warden-console` and integrators), this binary is the

@@ -2,7 +2,7 @@
 # Crate name matches the warden-* repo family convention
 # (warden-sdk, warden-hil, warden-proxy, …). The binary itself stays
 # `wardenctl` — single-word, like `kubectl` shipped from the
-# `kubernetes` repo — so the operator UX in ONBOARDING.md §9 reads
+# `kubernetes` repo — so the operator UX in warden-specs/TECH_SPEC.md#agent-onboarding-wao §9 reads
 # verbatim as the command line.
 name = "warden-ctl"
 version = "0.1.0"
@@ -15,7 +15,7 @@ name = "wardenctl"
 path = "src/main.rs"
 
 [dependencies]
-# Path-dep on warden-sdk (sibling repo, not a Cargo workspace — see CLAUDE.md).
+# Path-dep on warden-sdk (sibling repo, not a Cargo workspace).
 warden-sdk = { path = "../warden-sdk" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs"] }

@@ -113,7 +113,7 @@ Resolution order, highest priority first:
 
 ## Exit codes
 
-Per `ONBOARDING.md` §9.3, deterministic and machine-checkable:
+Per `warden-specs/TECH_SPEC.md#agent-onboarding-wao` §9.3, deterministic and machine-checkable:
 
 | Code | Meaning | Examples |
 |------|---------|----------|
@@ -150,7 +150,7 @@ cargo clippy --all-targets -- -D warnings
 
 The crate is **not** part of a Cargo workspace — it sits next to its
 sibling repos under `claude/repos/` and depends on `warden-sdk` via a
-`path = "../warden-sdk"` dep. See the parent `CLAUDE.md` for the
+`path = "../warden-sdk"` dep. See the parent repo layout for the
 multi-repo layout.
 
 ## License
