@@ -1,9 +1,9 @@
 //! `wardenctl auth` — login / logout / whoami.
 //!
-//! P1 surface: a "manual paste" login that reads a pre-minted
+//! Initial surface: a "manual paste" login that reads a pre-minted
 //! `id_token` from a file or stdin and caches it in
 //! `~/.warden/credentials.json`. The full RFC 8628 device-authorization
-//! grant lands with the dex mock in P4.
+//! grant lands later with the dex mock.
 //!
 //! Why "manual paste" first: the e2e runner (`run-onboarding.sh`)
 //! mints id_tokens directly via `dex /token` (password grant) and
@@ -75,7 +75,7 @@ pub async fn run(args: AuthArgs, _identity_url: Option<String>) -> ExitCode {
 async fn login(args: LoginArgs) -> ExitCode {
     if args.token_file.is_none() && !args.token_stdin {
         eprintln!(
-            "error: provide --token-file <PATH> or --token-stdin (device-flow is a P4 follow-up)"
+            "error: provide --token-file <PATH> or --token-stdin (device-flow is a follow-up)"
         );
         return ExitCode::Validation;
     }
