@@ -1,7 +1,7 @@
 //! `wardenctl agents` — full read + write access to the agents table.
 //!
-//! P2 surface (this commit) wires the lifecycle write commands on top
-//! of P1's read-only foundation:
+//! Wires the lifecycle write commands on top
+//! of the read-only foundation:
 //!
 //! ```text
 //! wardenctl agents list   --tenant <T> [--state …] [--owner-team …] [--json]
@@ -65,7 +65,7 @@ pub enum AgentsCommand {
     Transfer(TransferArgs),
     /// Update the free-text description.
     Description(DescriptionArgs),
-    /// Bulk-enroll legacy agents onto the registry (spec §7.3 / P5).
+    /// Bulk-enroll legacy agents onto the registry (spec §7.3).
     /// The official adoption path for the `Warn` → `Enforce` flip.
     Migrate(crate::cmd::migrate::MigrateArgs),
 }
@@ -140,8 +140,8 @@ pub struct LifecycleArgs {
     pub id: String,
     #[arg(long)]
     pub tenant: Option<String>,
-    /// Free-text reason. Lands on the chain v3 payload (P3) and the
-    /// forensic event today (P2).
+    /// Free-text reason. Lands on the chain v3 payload and the
+    /// forensic event today.
     #[arg(long)]
     pub reason: Option<String>,
     #[arg(long)]

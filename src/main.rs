@@ -5,7 +5,7 @@
 //! human-facing CLI. Single artifact, single source of truth: every
 //! `wardenctl` subcommand calls into a `warden-sdk` client.
 //!
-//! P1 surface (this commit):
+//! Initial surface (this commit):
 //!
 //! ```text
 //! wardenctl auth login   --tenant <T> --token-file <PATH>
@@ -16,8 +16,8 @@
 //! wardenctl agents get   <ID> --tenant <T> [--json]
 //! ```
 //!
-//! Device-authorization-grant flow (RFC 8628) is *not* in P1 — it
-//! lands with the dex mock in P4 where the e2e runner wires a real
+//! Device-authorization-grant flow (RFC 8628) is *not* yet shipped — it
+//! lands later with the dex mock where the e2e runner wires a real
 //! IdP. Until then `auth login` accepts a pre-minted id_token via
 //! `--token-file` or `--token-stdin`, which is also the workaround
 //! the spec's §13 test plan uses against dex.
@@ -57,10 +57,10 @@ struct Cli {
 enum Command {
     /// Authenticate against `warden-identity`, manage cached creds.
     Auth(cmd::auth::AuthArgs),
-    /// Read-only access to the registered agents table (P1). Writes
-    /// land in P2.
+    /// Read-only access to the registered agents table. Writes
+    /// land later.
     Agents(cmd::agents::AgentsArgs),
-    /// Regulatory exports (E6 slice 3): produce EU-AI-Act bundles
+    /// Regulatory exports: produce EU-AI-Act bundles
     /// from the ledger over a time window.
     Regulatory(cmd::regulatory::RegulatoryArgs),
 }

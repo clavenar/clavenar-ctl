@@ -13,7 +13,7 @@ you run `wardenctl ...`.
 
 ## Status
 
-`ONBOARDING.md` P1–P5 read + write surfaces all shipped. The full RFC
+Onboarding read + write surfaces all shipped. The full RFC
 8628 device-authorization-grant flow remains the open item — it lands
 once the dex mock IdP is wired in `warden-e2e`; until then, supply the
 `id_token` via `--token-file` or `--token-stdin`.
@@ -44,7 +44,7 @@ wardenctl agents transfer      <ID> --tenant <T> --to-team <T>
 wardenctl agents description   <ID> --tenant <T> --text <D>
 ```
 
-Migration (P5):
+Migration:
 
 ```sh
 wardenctl agents migrate \
@@ -77,7 +77,7 @@ Windows by default).
 | Linux / macOS | `~/.warden/credentials.json` |
 | Windows | `%APPDATA%\warden\credentials.json` |
 
-Until device-flow ships in P4, supply the token via `--token-file
+Until device-flow ships, supply the token via `--token-file
 <path>` or `--token-stdin`. The expected workflow:
 
 ```sh

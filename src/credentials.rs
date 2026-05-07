@@ -24,7 +24,7 @@
 //!
 //! On Unix the file is created with mode `0600` so a stolen-laptop
 //! attacker without root can't read another user's token. Refresh-token
-//! flow lands in P4 alongside the device-authorization grant; for P1
+//! flow lands later alongside the device-authorization grant; for now
 //! the `id_token` is what the user supplied verbatim and `refresh_token`
 //! is always `None`.
 
@@ -136,7 +136,7 @@ pub struct UnverifiedClaims {
 /// Decode the `sub`, `iss`, and `exp` claims from a JWT *without
 /// verifying the signature*. The server is the authoritative
 /// verifier; this is for `whoami` display and for prefilling the
-/// `created_by_sub` audit field on `agents create` (P2) from the
+/// `created_by_sub` audit field on `agents create` from the
 /// cached creds without re-parsing the JWT on every call.
 pub fn unverified_decode(id_token: &str) -> Result<UnverifiedClaims> {
     use base64::{engine::general_purpose, Engine as _};

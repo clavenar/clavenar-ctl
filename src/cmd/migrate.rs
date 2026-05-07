@@ -1,7 +1,7 @@
 //! `wardenctl agents migrate` — bulk-enroll existing SVID-only agents
 //! onto the registered-agents table (ONBOARDING.md §7.3, §13.1.7).
 //!
-//! P5 deliverable. The migration command is the official adoption path
+//! Migration deliverable. The migration command is the official adoption path
 //! for the mode flip from `Warn` to `Enforce`: an operator runs
 //! `wardenctl agents migrate` once with default `(owner_team, scope,
 //! kinds)` for the legacy fleet, identity creates one row per

@@ -1,5 +1,5 @@
 //! `wardenctl regulatory export` — operator-side regulatory bundle
-//! export (E6 slice 3).
+//! export.
 //!
 //! Wraps the SDK's `LedgerClient::regulatory_export` with file IO + a
 //! human-friendly progress story:
