@@ -69,20 +69,24 @@ jobs:
           fi
           gh repo clone vanteguardlabs/warden-sdk ../warden-sdk -- --depth 1
 
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check all
+      # cargo-deny + cargo-cyclonedx are run host-side via cargo-binstall
+      # rather than the dockerized EmbarkStudios action because that
+      # action mounts only `/github/workspace`, which makes the
+      # `../warden-sdk` path-dep invisible to `cargo metadata` inside
+      # the container. cargo-binstall pulls each prebuilt binary in
+      # ~3s instead of building from source (~2 min). SBOM lands as
+      # `<crate>.cdx.json` at the repo root; we upload it as a build
+      # artifact so reviewers can diff dep graphs across PRs and so a
+      # future release pipeline can attach it to GitHub releases.
+      - uses: dtolnay/rust-toolchain@stable
 
-      # cargo-cyclonedx publishes prebuilt binaries on every release, so
-      # cargo-binstall pulls one in ~3s rather than cargo-installing from
-      # source (~2 min). SBOM lands as `<crate>.cdx.json` at the repo
-      # root; we upload it as a build artifact so reviewers can diff dep
-      # graphs across PRs and so a future release pipeline can attach it
-      # to GitHub releases.
       - uses: cargo-bins/cargo-binstall@main
 
-      - name: install cargo-cyclonedx
-        run: cargo binstall --no-confirm cargo-cyclonedx
+      - name: install cargo-deny + cargo-cyclonedx
+        run: cargo binstall --no-confirm cargo-deny cargo-cyclonedx
+
+      - name: cargo-deny check all
+        run: cargo deny check all
 
       - name: generate SBOM
         run: cargo cyclonedx --format json --describe crate
