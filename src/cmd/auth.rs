@@ -1,9 +1,10 @@
 //! `wardenctl auth` — login / logout / whoami.
 //!
 //! Initial surface: a "manual paste" login that reads a pre-minted
-//! `id_token` from a file or stdin and caches it in
-//! `~/.warden/credentials.json`. The full RFC 8628 device-authorization
-//! grant lands later with the dex mock.
+//! `id_token` from a file or stdin and caches it in the OS-correct
+//! credentials file (Linux: `~/.config/warden/credentials.json`).
+//! The full RFC 8628 device-authorization grant lands later with the
+//! dex mock.
 //!
 //! Why "manual paste" first: the e2e runner (`run-onboarding.sh`)
 //! mints id_tokens directly via `dex /token` (password grant) and

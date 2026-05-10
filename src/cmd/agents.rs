@@ -20,10 +20,10 @@
 //! ```
 //!
 //! All paths share the same auth, exit-code, and tenant-resolution
-//! plumbing: bearer comes from the cached creds at
-//! `~/.warden/credentials.json`; tenant defaults to flag → env →
-//! config; exit codes follow spec §9.3 via
-//! [`crate::ExitCode::from_warden_error`].
+//! plumbing: bearer comes from the cached creds at the OS-correct
+//! credentials path (Linux: `~/.config/warden/credentials.json`);
+//! tenant defaults to flag → env → config; exit codes follow spec
+//! §9.3 via [`crate::ExitCode::from_warden_error`].
 //!
 //! `--if-absent` on `create` is the IaC-without-Terraform pattern: a
 //! pre-fetch by `(tenant, agent_name)` decides whether to POST. On a
@@ -73,7 +73,7 @@ pub enum AgentsCommand {
 #[derive(Debug, Args)]
 pub struct ListArgs {
     /// Tenant to list within. Falls back to `WARDEN_TENANT` env, then
-    /// `~/.warden/config.toml`'s `default_tenant`.
+    /// the config file's `default_tenant`.
     #[arg(long)]
     pub tenant: Option<String>,
     /// Filter to one lifecycle state (active|suspended|decommissioned).
