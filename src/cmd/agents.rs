@@ -233,11 +233,7 @@ pub async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitCode {
         AgentsCommand::Envelope(a) => envelope(a, &cfg, &url).await,
         AgentsCommand::Transfer(a) => transfer(a, &cfg, &url).await,
         AgentsCommand::Description(a) => description(a, &cfg, &url).await,
-        // `migrate` runs its own config/cred resolution (it needs the
-        // operator's `sub` claim from the cached id_token) — pass the
-        // global identity_url override through, not the resolved url
-        // we already computed, so the migrate cmd can re-derive it.
-        AgentsCommand::Migrate(a) => crate::cmd::migrate::run(a, Some(url.clone())).await,
+        AgentsCommand::Migrate(a) => crate::cmd::migrate::run(a, &cfg, &url).await,
     }
 }
 
@@ -461,25 +457,11 @@ async fn lifecycle(
 }
 
 async fn envelope(args: EnvelopeArgs, cfg: &config::Config, url: &str) -> ExitCode {
-    let (id, tenant_arg, scope, yellow, json_out, direction) = match args.direction {
-        EnvelopeDirection::Narrow(a) => (
-            a.id,
-            a.tenant,
-            a.scope,
-            a.yellow_scope,
-            a.json,
-            EnvelopeDirectionRaw::Narrow,
-        ),
-        EnvelopeDirection::Widen(a) => (
-            a.id,
-            a.tenant,
-            a.scope,
-            a.yellow_scope,
-            a.json,
-            EnvelopeDirectionRaw::Widen,
-        ),
+    let (change, narrow) = match args.direction {
+        EnvelopeDirection::Narrow(a) => (a, true),
+        EnvelopeDirection::Widen(a) => (a, false),
     };
-    let tenant = match config::resolve_tenant(tenant_arg, cfg) {
+    let tenant = match config::resolve_tenant(change.tenant, cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -488,16 +470,17 @@ async fn envelope(args: EnvelopeArgs, cfg: &config::Config, url: &str) -> ExitCo
         Err(c) => return c,
     };
     let env = EnvelopeRequest {
-        scope_envelope: &scope,
-        yellow_envelope: &yellow,
+        scope_envelope: &change.scope,
+        yellow_envelope: &change.yellow_scope,
     };
-    let result = match direction {
-        EnvelopeDirectionRaw::Narrow => client.envelope_narrow(&id, &tenant, env).await,
-        EnvelopeDirectionRaw::Widen => client.envelope_widen(&id, &tenant, env).await,
+    let result = if narrow {
+        client.envelope_narrow(&change.id, &tenant, env).await
+    } else {
+        client.envelope_widen(&change.id, &tenant, env).await
     };
     match result {
         Ok(record) => {
-            if json_out {
+            if change.json {
                 println!("{}", serde_json::to_string_pretty(&record).unwrap());
             } else {
                 print_record(&record);
@@ -509,12 +492,6 @@ async fn envelope(args: EnvelopeArgs, cfg: &config::Config, url: &str) -> ExitCo
             ExitCode::from_warden_error(&e)
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum EnvelopeDirectionRaw {
-    Narrow,
-    Widen,
 }
 
 async fn transfer(args: TransferArgs, cfg: &config::Config, url: &str) -> ExitCode {

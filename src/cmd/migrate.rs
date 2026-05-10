@@ -117,18 +117,8 @@ struct Outcome {
     error: Option<String>,
 }
 
-pub async fn run(args: MigrateArgs, identity_url: Option<String>) -> ExitCode {
-    let cfg = match config::load() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("error: load config: {e}");
-            return ExitCode::Validation;
-        }
-    };
-    let env_url = std::env::var("WARDEN_IDENTITY_URL").ok();
-    let url = config::resolve_identity_url(identity_url.as_deref(), env_url.as_deref(), &cfg);
-
-    let tenant = match config::resolve_tenant(args.tenant.clone(), &cfg) {
+pub async fn run(args: MigrateArgs, cfg: &config::Config, url: &str) -> ExitCode {
+    let tenant = match config::resolve_tenant(args.tenant.clone(), cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -175,7 +165,7 @@ pub async fn run(args: MigrateArgs, identity_url: Option<String>) -> ExitCode {
     };
     let actor_sub = format!("{MIGRATION_ACTOR_SUB_PREFIX}{operator_sub}");
 
-    let client = match AgentsClient::new(&url) {
+    let client = match AgentsClient::new(url) {
         Ok(c) => c.with_bearer(bearer.clone()),
         Err(e) => {
             eprintln!("error: invalid identity URL '{url}': {e}");
