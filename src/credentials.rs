@@ -92,7 +92,9 @@ pub fn load() -> Result<Credentials> {
 }
 
 /// Persist the credentials bag. Creates the parent directory if it
-/// doesn't exist; sets `0600` on Unix.
+/// doesn't exist; on Unix the file is opened with mode `0600` *atomically
+/// with create*, so a fresh install never has a window where the bearer
+/// is world-readable under the default umask.
 pub fn save(creds: &Credentials) -> Result<()> {
     let path = credentials_path()?;
     if let Some(parent) = path.parent() {
@@ -100,26 +102,36 @@ pub fn save(creds: &Credentials) -> Result<()> {
             .with_context(|| format!("create {}", parent.display()))?;
     }
     let body = serde_json::to_string_pretty(creds)?;
-    std::fs::write(&path, body).with_context(|| format!("write {}", path.display()))?;
-    set_perms_0600(&path)?;
+    write_0600(&path, body.as_bytes())
+        .with_context(|| format!("write {}", path.display()))?;
     Ok(())
 }
 
 #[cfg(unix)]
-fn set_perms_0600(path: &std::path::Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut perms = std::fs::metadata(path)
-        .with_context(|| format!("stat {}", path.display()))?
-        .permissions();
+fn write_0600(path: &std::path::Path, body: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    f.write_all(body)?;
+    // `mode(0o600)` only takes effect when the file is newly created
+    // (per `open(2)`'s `mode` argument). For a pre-existing file with
+    // looser perms — e.g. a credentials.json from before this fix —
+    // explicit chmod after write is what tightens it.
+    let mut perms = std::fs::metadata(path)?.permissions();
     perms.set_mode(0o600);
-    std::fs::set_permissions(path, perms)
-        .with_context(|| format!("chmod {}", path.display()))
+    std::fs::set_permissions(path, perms)?;
+    Ok(())
 }
 
 #[cfg(not(unix))]
-fn set_perms_0600(_path: &std::path::Path) -> Result<()> {
+fn write_0600(path: &std::path::Path, body: &[u8]) -> std::io::Result<()> {
     // Windows ACLs already restrict to the user; no chmod equivalent.
-    Ok(())
+    std::fs::write(path, body)
 }
 
 /// Subset of JWT claims `unverified_decode` extracts. Every field is
@@ -213,6 +225,42 @@ mod tests {
         );
         assert_eq!(bearer_for(&creds, "acme").unwrap(), "tok-123");
         assert!(bearer_for(&creds, "globex").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_creates_file_with_0600_perms() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("credentials.json");
+        let prev = std::env::var("WARDEN_CREDENTIALS_PATH").ok();
+        // SAFETY: the test runs in a single-threaded `#[test]` slot.
+        // `set_var`/`remove_var` are safe in this scope. Restored at the end.
+        unsafe { std::env::set_var("WARDEN_CREDENTIALS_PATH", &target); }
+
+        let mut creds = Credentials::default();
+        creds.tenants.insert(
+            "acme".into(),
+            TenantCredential {
+                id_token: "tok".into(),
+                refresh_token: None,
+                expires_at: None,
+                sub: None,
+                issuer: None,
+            },
+        );
+        save(&creds).unwrap();
+
+        let perms = std::fs::metadata(&target).unwrap().permissions();
+        // mask off ftype bits — the mode integer carries them on Unix.
+        assert_eq!(perms.mode() & 0o777, 0o600);
+
+        unsafe {
+            match prev {
+                Some(v) => std::env::set_var("WARDEN_CREDENTIALS_PATH", v),
+                None => std::env::remove_var("WARDEN_CREDENTIALS_PATH"),
+            }
+        }
     }
 
     #[test]
