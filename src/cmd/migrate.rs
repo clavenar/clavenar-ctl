@@ -187,8 +187,7 @@ pub async fn run(args: MigrateArgs, identity_url: Option<String>) -> ExitCode {
     let mut hard_failure = false;
 
     for name in &names {
-        // 1. Pre-fetch by `(tenant, agent_name)` — same idempotency
-        //    pattern the `agents create --if-absent` flag uses.
+        // Same idempotency pattern as `agents create --if-absent`.
         let existing = match client.find_by_name(&tenant, name).await {
             Ok(v) => v,
             Err(e) => {
@@ -203,8 +202,6 @@ pub async fn run(args: MigrateArgs, identity_url: Option<String>) -> ExitCode {
             }
         };
 
-        // 2. Build the request once so the matcher and the POST share
-        //    a definition.
         let req = CreateAgentRequest {
             tenant: tenant.as_str(),
             agent_name: name.as_str(),
@@ -239,8 +236,6 @@ pub async fn run(args: MigrateArgs, identity_url: Option<String>) -> ExitCode {
             continue;
         }
 
-        // 3. Fresh registration. In `--dry-run` mode we stop at the
-        //    "would create" line; in normal mode we POST.
         if args.dry_run {
             outcomes.push(Outcome {
                 name: name.clone(),
@@ -271,8 +266,6 @@ pub async fn run(args: MigrateArgs, identity_url: Option<String>) -> ExitCode {
         }
     }
 
-    // Render summary. JSON is array-of-Outcome; human form is a
-    // fixed-width table.
     if args.json {
         match serde_json::to_string_pretty(&outcomes) {
             Ok(s) => println!("{s}"),

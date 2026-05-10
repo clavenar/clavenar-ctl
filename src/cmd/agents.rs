@@ -398,9 +398,7 @@ async fn create(args: CreateArgs, cfg: &config::Config, url: &str) -> ExitCode {
                 );
                 return ExitCode::Conflict;
             }
-            Ok(None) => {
-                // Fall through to the regular create path below.
-            }
+            Ok(None) => {}
             Err(e) => {
                 eprintln!("error: pre-fetch failed: {e}");
                 return ExitCode::from_warden_error(&e);
@@ -609,8 +607,7 @@ fn print_table(rows: &[AgentRecord]) {
         println!("(no agents)");
         return;
     }
-    // Column widths derived from data + headers, capped to keep rows
-    // readable. Cap is generous — agent names rarely exceed 32 chars.
+    // Cap kept generous — agent names rarely exceed 32 chars in practice.
     let name_w = rows
         .iter()
         .map(|r| r.agent_name.len())

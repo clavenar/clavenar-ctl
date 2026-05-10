@@ -88,7 +88,6 @@ async fn login(args: LoginArgs) -> ExitCode {
             }
         },
         None => {
-            // --token-stdin
             let mut buf = String::new();
             if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
                 eprintln!("error: read stdin: {e}");
