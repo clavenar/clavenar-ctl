@@ -128,7 +128,7 @@ pub async fn run(args: MigrateArgs, identity_url: Option<String>) -> ExitCode {
     let env_url = std::env::var("WARDEN_IDENTITY_URL").ok();
     let url = config::resolve_identity_url(identity_url.as_deref(), env_url.as_deref(), &cfg);
 
-    let tenant = match resolve_tenant(args.tenant.clone(), &cfg) {
+    let tenant = match config::resolve_tenant(args.tenant.clone(), &cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -304,18 +304,6 @@ fn read_names_file(path: &std::path::Path) -> std::io::Result<Vec<String>> {
         }
     }
     Ok(out)
-}
-
-/// Same precedence chain as the rest of `wardenctl agents`.
-fn resolve_tenant(arg: Option<String>, cfg: &config::Config) -> Result<String, ExitCode> {
-    arg.or_else(|| std::env::var("WARDEN_TENANT").ok())
-        .or_else(|| cfg.default_tenant.clone())
-        .ok_or_else(|| {
-            eprintln!(
-                "error: --tenant required (or set WARDEN_TENANT or default_tenant in config.toml)"
-            );
-            ExitCode::Validation
-        })
 }
 
 /// Plain-text summary table. Columns: name, action, id, error.
