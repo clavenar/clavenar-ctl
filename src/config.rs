@@ -1,11 +1,12 @@
-//! `~/.warden/config.toml` — operator-level CLI defaults.
+//! `config.toml` — operator-level CLI defaults.
 //!
 //! Optional file at the OS-correct config dir (`directories` crate
-//! resolves it: `~/.warden/config.toml` on Linux/macOS,
-//! `%APPDATA%\warden\config.toml` on Windows). Carries a default
-//! identity URL and tenant so `wardenctl agents list` doesn't need to
-//! repeat them on every call. Per-call CLI flags and env vars override
-//! the file.
+//! resolves it: `~/.config/warden/config.toml` on Linux,
+//! `~/Library/Application Support/dev.agent-warden.warden/config.toml`
+//! on macOS, `%APPDATA%\agent-warden\warden\config\config.toml` on
+//! Windows). Carries a default identity URL and tenant so `wardenctl
+//! agents list` doesn't need to repeat them on every call. Per-call
+//! CLI flags and env vars override the file.
 //!
 //! This is *not* a place for sensitive data — bearer tokens live in the
 //! companion [`crate::credentials`] file, which is `0600` on Unix.

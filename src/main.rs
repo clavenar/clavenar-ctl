@@ -5,16 +5,9 @@
 //! human-facing CLI. Single artifact, single source of truth: every
 //! `wardenctl` subcommand calls into a `warden-sdk` client.
 //!
-//! Initial surface (this commit):
-//!
-//! ```text
-//! wardenctl auth login   --tenant <T> --token-file <PATH>
-//! wardenctl auth login   --tenant <T> --token-stdin
-//! wardenctl auth logout
-//! wardenctl auth whoami  [--json]
-//! wardenctl agents list  --tenant <T> [--state ...] [--owner-team ...] [--json]
-//! wardenctl agents get   <ID> --tenant <T> [--json]
-//! ```
+//! Top-level surface — see `README.md` for the full subcommand listing
+//! and `wardenctl <verb> --help` for flag-level docs. The three verbs
+//! today are `auth`, `agents`, and `regulatory`.
 //!
 //! Device-authorization-grant flow (RFC 8628) is *not* yet shipped — it
 //! lands later with the dex mock where the e2e runner wires a real

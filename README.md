@@ -48,14 +48,41 @@ Migration:
 
 ```sh
 wardenctl agents migrate \
-  --identity-db /var/lib/warden-identity/identity.sqlite \
-  [--dry-run] [--default-owner-team unassigned] \
-  [--default-envelope '*'] [--default-attestation-kinds '*']
+  --tenant <T> \
+  --names path/to/agent-names.txt \
+  --default-owner-team legacy-fleet \
+  [--default-scope <S>...] [--default-yellow-scope <S>...] \
+  [--default-attestation-kind <K>...] \
+  [--dry-run] [--json]
 ```
+
+`--names` takes a flat list of agent names — one per line, blank lines
+and `# comment` rows skipped. The CLI doesn't reach into identity's
+SQLite directly; the operator builds the list from their own source
+of truth (logs, IaC, `grep` over existing SPIFFE identities).
 
 The migration command anchors `agent.registered` chain v3 rows with
 `actor_sub = system:migration:<operator_oidc_sub>` so the chain
 records the human who ran the bulk enrollment.
+
+Regulatory exports:
+
+```sh
+wardenctl regulatory export \
+  --from 2026-04-01T00:00:00Z --to 2026-05-01T00:00:00Z \
+  [--readme path/to/technical_documentation.md] \
+  [--include-exports] \
+  [--ledger-url http://ledger.test:8083] \
+  --output bundle.tar.gz   # or '-' for stdout
+```
+
+Window is half-open `[from, to)`. `--readme` (≤ 1 MiB) embeds operator
+prose under `technical_documentation.md` inside the bundle; the
+ledger commits to its sha256 in the manifest. `--include-exports`
+asks the ledger to splice in `manifest.parquet_pointers` for any
+cold-tier snapshot whose seq range overlaps the window.
+
+Ledger URL precedence: flag → `WARDEN_LEDGER_URL` env → `http://localhost:8083`.
 
 ## Install
 
@@ -69,13 +96,21 @@ The binary lands as `~/.cargo/bin/wardenctl`.
 ## Auth
 
 `wardenctl auth login` caches an OIDC `id_token` per tenant in the
-OS-correct credentials file (mode `0600` on Unix; ACL-restricted on
-Windows by default).
+OS-correct credentials file (mode `0600` on Unix, opened with that
+mode atomically on create so a stolen-laptop attacker without root
+can't read another user's token; ACL-restricted on Windows by
+default).
+
+The on-disk path follows the `directories` crate's `config_dir()`:
 
 | Platform | Path |
 |---|---|
-| Linux / macOS | `~/.warden/credentials.json` |
-| Windows | `%APPDATA%\warden\credentials.json` |
+| Linux | `~/.config/warden/credentials.json` (or `$XDG_CONFIG_HOME/warden/...`) |
+| macOS | `~/Library/Application Support/dev.agent-warden.warden/credentials.json` |
+| Windows | `%APPDATA%\agent-warden\warden\config\credentials.json` |
+
+Tests and the e2e runner override the path with `WARDEN_CREDENTIALS_PATH`
+so they don't pollute the operator's real file.
 
 Until device-flow ships, supply the token via `--token-file
 <path>` or `--token-stdin`. The expected workflow:
@@ -96,7 +131,8 @@ every request remains the authoritative check.
 
 ## Configuration
 
-`~/.warden/config.toml` (optional) holds CLI defaults:
+A `config.toml` next to the credentials file (e.g.
+`~/.config/warden/config.toml` on Linux) holds CLI defaults — optional:
 
 ```toml
 identity_url = "https://identity.acme.com:8086"
