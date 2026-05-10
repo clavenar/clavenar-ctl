@@ -248,20 +248,6 @@ enum LifecycleVerb {
     Decommission,
 }
 
-/// Resolve `--tenant` against the precedence chain: flag → env →
-/// config file's `default_tenant`. Returns a typed exit code on
-/// missing.
-fn resolve_tenant(arg: Option<String>, cfg: &config::Config) -> Result<String, ExitCode> {
-    arg.or_else(|| std::env::var("WARDEN_TENANT").ok())
-        .or_else(|| cfg.default_tenant.clone())
-        .ok_or_else(|| {
-            eprintln!(
-                "error: --tenant required (or set WARDEN_TENANT or default_tenant in config.toml)"
-            );
-            ExitCode::Validation
-        })
-}
-
 fn build_client(url: &str, tenant: &str) -> Result<AgentsClient, ExitCode> {
     let creds = credentials::load().map_err(|e| {
         eprintln!("error: load credentials: {e}");
@@ -280,7 +266,7 @@ fn build_client(url: &str, tenant: &str) -> Result<AgentsClient, ExitCode> {
 }
 
 async fn list(args: ListArgs, cfg: &config::Config, url: &str) -> ExitCode {
-    let tenant = match resolve_tenant(args.tenant, cfg) {
+    let tenant = match config::resolve_tenant(args.tenant, cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -319,7 +305,7 @@ async fn list(args: ListArgs, cfg: &config::Config, url: &str) -> ExitCode {
 }
 
 async fn get(args: GetArgs, cfg: &config::Config, url: &str) -> ExitCode {
-    let tenant = match resolve_tenant(args.tenant, cfg) {
+    let tenant = match config::resolve_tenant(args.tenant, cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -344,7 +330,7 @@ async fn get(args: GetArgs, cfg: &config::Config, url: &str) -> ExitCode {
 }
 
 async fn create(args: CreateArgs, cfg: &config::Config, url: &str) -> ExitCode {
-    let tenant = match resolve_tenant(args.tenant.clone(), cfg) {
+    let tenant = match config::resolve_tenant(args.tenant.clone(), cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -434,7 +420,7 @@ async fn lifecycle(
     url: &str,
     verb: LifecycleVerb,
 ) -> ExitCode {
-    let tenant = match resolve_tenant(args.tenant, cfg) {
+    let tenant = match config::resolve_tenant(args.tenant, cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -493,7 +479,7 @@ async fn envelope(args: EnvelopeArgs, cfg: &config::Config, url: &str) -> ExitCo
             EnvelopeDirectionRaw::Widen,
         ),
     };
-    let tenant = match resolve_tenant(tenant_arg, cfg) {
+    let tenant = match config::resolve_tenant(tenant_arg, cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -532,7 +518,7 @@ enum EnvelopeDirectionRaw {
 }
 
 async fn transfer(args: TransferArgs, cfg: &config::Config, url: &str) -> ExitCode {
-    let tenant = match resolve_tenant(args.tenant, cfg) {
+    let tenant = match config::resolve_tenant(args.tenant, cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -560,7 +546,7 @@ async fn transfer(args: TransferArgs, cfg: &config::Config, url: &str) -> ExitCo
 }
 
 async fn description(args: DescriptionArgs, cfg: &config::Config, url: &str) -> ExitCode {
-    let tenant = match resolve_tenant(args.tenant, cfg) {
+    let tenant = match config::resolve_tenant(args.tenant, cfg) {
         Ok(t) => t,
         Err(c) => return c,
     };
@@ -741,33 +727,4 @@ mod tests {
         print_record(&r);
     }
 
-    #[test]
-    fn resolve_tenant_uses_config_default() {
-        let cfg = config::Config {
-            identity_url: None,
-            default_tenant: Some("acme".into()),
-        };
-        // Save and restore env to avoid clobbering a real WARDEN_TENANT.
-        let prev = std::env::var("WARDEN_TENANT").ok();
-        unsafe {
-            std::env::remove_var("WARDEN_TENANT");
-        }
-        let resolved = resolve_tenant(None, &cfg).unwrap();
-        assert_eq!(resolved, "acme");
-        unsafe {
-            if let Some(v) = prev {
-                std::env::set_var("WARDEN_TENANT", v);
-            }
-        }
-    }
-
-    #[test]
-    fn resolve_tenant_flag_wins() {
-        let cfg = config::Config {
-            identity_url: None,
-            default_tenant: Some("acme".into()),
-        };
-        let resolved = resolve_tenant(Some("globex".into()), &cfg).unwrap();
-        assert_eq!(resolved, "globex");
-    }
 }

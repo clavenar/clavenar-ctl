@@ -25,6 +25,8 @@ use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::ExitCode;
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Identity service base URL. Defaults to
@@ -72,6 +74,21 @@ pub fn resolve_identity_url(
         .or_else(|| env_override.map(str::to_string))
         .or_else(|| cfg.identity_url.clone())
         .unwrap_or_else(|| "http://localhost:8086".to_string())
+}
+
+/// Resolve `--tenant` against the precedence chain: flag → env →
+/// config file's `default_tenant`. Returns `Validation` on missing
+/// after emitting the operator-actionable error message — keeps the
+/// "where's tenant supposed to come from?" hint in one place.
+pub fn resolve_tenant(arg: Option<String>, cfg: &Config) -> Result<String, ExitCode> {
+    arg.or_else(|| std::env::var("WARDEN_TENANT").ok())
+        .or_else(|| cfg.default_tenant.clone())
+        .ok_or_else(|| {
+            eprintln!(
+                "error: --tenant required (or set WARDEN_TENANT or default_tenant in config.toml)"
+            );
+            ExitCode::Validation
+        })
 }
 
 #[cfg(test)]
@@ -123,6 +140,35 @@ mod tests {
             resolve_identity_url(None, None, &cfg),
             "http://localhost:8086"
         );
+    }
+
+    #[test]
+    fn resolve_tenant_uses_config_default() {
+        let cfg = Config {
+            identity_url: None,
+            default_tenant: Some("acme".into()),
+        };
+        let prev = std::env::var("WARDEN_TENANT").ok();
+        unsafe {
+            std::env::remove_var("WARDEN_TENANT");
+        }
+        let resolved = resolve_tenant(None, &cfg).unwrap();
+        assert_eq!(resolved, "acme");
+        unsafe {
+            if let Some(v) = prev {
+                std::env::set_var("WARDEN_TENANT", v);
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_tenant_flag_wins() {
+        let cfg = Config {
+            identity_url: None,
+            default_tenant: Some("acme".into()),
+        };
+        let resolved = resolve_tenant(Some("globex".into()), &cfg).unwrap();
+        assert_eq!(resolved, "globex");
     }
 
     #[test]
