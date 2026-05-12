@@ -18,6 +18,28 @@ Onboarding read + write surfaces all shipped. The full RFC
 once the dex mock IdP is wired in `warden-e2e`; until then, supply the
 `id_token` via `--token-file` or `--token-stdin`.
 
+First-run surface (scaffold + probe + Rego templates):
+
+```sh
+wardenctl init                          # scaffold ~/.config/warden/config.toml
+wardenctl init --with-policies          # also drop the 7 templates into ./policies/templates/
+wardenctl doctor                        # probe /health on every warden service URL
+wardenctl doctor --json                 # JSON output for CI smoke
+wardenctl generate-policy list          # browse the starter pack
+wardenctl generate-policy pii_egress    # emit a template to stdout
+wardenctl generate-policy pii_egress --output policies/pii_egress.rego
+```
+
+`doctor` reports up/down/latency for identity, ledger, hil, console,
+brain, and policy-engine. Proxy is opt-in via `--proxy-url` because
+its mTLS gate looks like "down" to a no-cert probe. Exit code is 0
+when every probed service is up, 5 otherwise — safe to wire into
+`docker compose` healthcheck loops or CI smoke scripts.
+
+`generate-policy` templates are embedded in the binary at build time
+from `warden-policy-engine/policies/templates/` — no FS dependency
+at runtime.
+
 Read surface:
 
 ```sh

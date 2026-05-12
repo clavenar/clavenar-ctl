@@ -4,5 +4,8 @@
 
 pub mod agents;
 pub mod auth;
+pub mod doctor;
+pub mod init;
 pub mod migrate;
+pub mod policy;
 pub mod regulatory;
