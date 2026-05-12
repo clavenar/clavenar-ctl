@@ -13,22 +13,25 @@ jobs:
       - uses: actions/checkout@v4
 
       # Sibling-checkout: warden-ctl declares warden-sdk as a path dep
-      # ("../warden-sdk") because all repos sit as siblings under
+      # ("../warden-sdk") and additionally `include_str!`s policy
+      # templates from `../warden-policy-engine/policies/templates/`
+      # (see src/cmd/policy.rs). All repos sit as siblings under
       # repos/ in local dev. CI gets only one repo by default, so we
-      # clone the sibling into the same relative location. Requires a
+      # clone the siblings into the same relative location. Requires a
       # WARDEN_REPO_TOKEN secret: a fine-grained PAT with Contents:Read
-      # on vanteguardlabs/warden-sdk. actions/checkout's `path` is
-      # restricted to inside the workspace, so we use `gh repo clone`
-      # directly to land outside it.
-      - name: checkout warden-sdk sibling
+      # on vanteguardlabs/warden-sdk + warden-policy-engine.
+      # actions/checkout's `path` is restricted to inside the
+      # workspace, so we use `gh repo clone` directly to land outside.
+      - name: checkout siblings
         env:
           GH_TOKEN: ${{ secrets.WARDEN_REPO_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::WARDEN_REPO_TOKEN secret not set. Create a fine-grained PAT with Contents:Read on vanteguardlabs/warden-sdk and add it under Settings → Secrets and variables → Actions."
+            echo "::error::WARDEN_REPO_TOKEN secret not set. Create a fine-grained PAT with Contents:Read on vanteguardlabs/warden-sdk + warden-policy-engine and add it under Settings → Secrets and variables → Actions."
             exit 1
           fi
           gh repo clone vanteguardlabs/warden-sdk ../warden-sdk -- --depth 1
+          gh repo clone vanteguardlabs/warden-policy-engine ../warden-policy-engine -- --depth 1
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -59,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: checkout warden-sdk sibling
+      - name: checkout siblings
         env:
           GH_TOKEN: ${{ secrets.WARDEN_REPO_TOKEN }}
         run: |
@@ -68,6 +71,7 @@ jobs:
             exit 1
           fi
           gh repo clone vanteguardlabs/warden-sdk ../warden-sdk -- --depth 1
+          gh repo clone vanteguardlabs/warden-policy-engine ../warden-policy-engine -- --depth 1
 
       # cargo-deny + cargo-cyclonedx are run host-side via cargo-binstall
       # rather than the dockerized EmbarkStudios action because that
