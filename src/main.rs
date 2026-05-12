@@ -48,6 +48,18 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Scaffold a fresh operator config + (optionally) starter
+    /// policies. Idempotent — refuses to clobber an existing config
+    /// without `--force`.
+    Init(cmd::init::InitArgs),
+    /// Probe `/health` on every warden service URL and report up /
+    /// down / latency. Exit 0 if every probed service is up,
+    /// 5 otherwise — wire-format-friendly for CI smoke tests.
+    Doctor(cmd::doctor::DoctorArgs),
+    /// Emit Rego policy templates from the warden-policy-engine
+    /// starter pack. `list` shows what's available; `generate <name>`
+    /// writes one to stdout or `--output FILE`.
+    GeneratePolicy(cmd::policy::PolicyArgs),
     /// Authenticate against `warden-identity`, manage cached creds.
     Auth(cmd::auth::AuthArgs),
     /// Read-only access to the registered agents table. Writes
@@ -78,6 +90,9 @@ async fn main() {
 /// through `?`.
 async fn run(cli: Cli) -> ExitCode {
     match cli.command {
+        Command::Init(args) => cmd::init::run(args).await,
+        Command::Doctor(args) => cmd::doctor::run(args).await,
+        Command::GeneratePolicy(args) => cmd::policy::run(args).await,
         Command::Auth(args) => cmd::auth::run(args, cli.identity_url).await,
         Command::Agents(args) => cmd::agents::run(args, cli.identity_url).await,
         // `regulatory` doesn't take an --identity-url; it talks

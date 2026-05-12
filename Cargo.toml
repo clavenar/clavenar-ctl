@@ -35,16 +35,16 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # `whoami` display — server is the authoritative verifier; this is
 # best-effort decode only.
 base64 = "0.22"
+# Doctor probes `/health` on every warden service over HTTP/HTTPS;
+# rustls keeps the build static and avoids the system OpenSSL dep.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Init scaffolds files; doctor + policy emit them. Tempfile is used
+# by the policy module's unit tests too.
+tempfile = "3"
 
 [dev-dependencies]
-tempfile = "3"
 # `assert_cmd` lets the integration tests spawn `cargo run --bin wardenctl`
 # and assert exit codes / stdout shape, matching the CLI contract from
 # spec §9.3.
 assert_cmd = "2"
 predicates = "3"
-# `WardenError::Server { status }` carries a `reqwest::StatusCode`; the
-# unit test for `ExitCode::from_warden_error` constructs canned errors
-# at known statuses. `reqwest` itself isn't a runtime dep — the SDK
-# owns the HTTP layer — so this stays in dev-deps.
-reqwest = { version = "0.12", default-features = false }
