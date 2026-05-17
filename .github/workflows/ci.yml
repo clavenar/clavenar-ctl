@@ -10,7 +10,7 @@ jobs:
     name: cargo check / test / clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Sibling-checkout: warden-ctl declares warden-sdk as a path dep
       # ("../warden-sdk") and additionally `include_str!`s policy
@@ -60,7 +60,7 @@ jobs:
     name: cargo-deny + cyclonedx SBOM
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: checkout siblings
         env:
@@ -96,7 +96,7 @@ jobs:
         run: cargo cyclonedx --format json --describe crate
 
       - name: upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sbom-${{ github.event.repository.name }}-${{ github.sha }}
           path: '*.cdx.json'
