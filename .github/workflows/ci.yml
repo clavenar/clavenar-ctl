@@ -3,7 +3,24 @@ name: CI
 on:
   push:
     branches: [main]
+    # Skip CI on doc-only / VERSION-only / LICENSE-only commits —
+    # they can't break a Rust build and we're conserving free-tier
+    # Actions minutes (May 18 2026 cap incident).
+    paths-ignore:
+      - '**.md'
+      - 'VERSION'
+      - 'LICENSE*'
+      - '.gitignore'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE*'
+      - '.gitignore'
+  # Weekly supply-chain refresh. cargo-deny + SBOM only runs on this
+  # trigger and on pull_request (not on push-to-main) — see the
+  # supply-chain job's `if:` gate below.
+  schedule:
+    - cron: '17 3 * * 0'
 
 jobs:
   ci:
@@ -58,6 +75,10 @@ jobs:
   # sibling-checkout step from the `ci` job.
   supply-chain:
     name: cargo-deny + cyclonedx SBOM
+    # Skip on push-to-main — the diff was already audited on its PR
+    # (cargo-deny is deterministic per Cargo.lock). Weekly schedule
+    # catches new RUSTSEC advisories regardless of activity.
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
