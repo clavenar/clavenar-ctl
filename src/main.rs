@@ -68,6 +68,12 @@ enum Command {
     /// Regulatory exports: produce EU-AI-Act bundles
     /// from the ledger over a time window.
     Regulatory(cmd::regulatory::RegulatoryArgs),
+    /// Stdio MCP shim — registers as an MCP server with a real client
+    /// (e.g. `claude mcp add`) and brokers traffic through the warden
+    /// proxy's mTLS `/mcp` surface. Intended for the real-agent smoke
+    /// flow documented in `warden-e2e/MANUAL_TESTS.md` (`S-MCP-01`),
+    /// not a long-lived production agent runtime.
+    McpBridge(cmd::mcp_bridge::McpBridgeArgs),
 }
 
 #[tokio::main]
@@ -98,6 +104,7 @@ async fn run(cli: Cli) -> ExitCode {
         // `regulatory` doesn't take an --identity-url; it talks
         // directly to the ledger (no agent-registry gate today).
         Command::Regulatory(args) => cmd::regulatory::run(args).await,
+        Command::McpBridge(args) => cmd::mcp_bridge::run(args).await,
     }
 }
 
