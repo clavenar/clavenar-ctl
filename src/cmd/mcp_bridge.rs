@@ -48,6 +48,13 @@ pub struct McpBridgeArgs {
     /// unattended approver.
     #[arg(long, default_value_t = 30)]
     pub timeout_secs: u64,
+    /// Skip server certificate validation. Only sensible against the
+    /// dev stack — `warden-proxy/scripts/gen_certs.sh` mints a
+    /// `server.crt` with `CN=localhost` and no SAN, which rustls
+    /// rejects per RFC 6125. Prod issues SVID-shaped certs with
+    /// proper SANs; do not pass this flag there.
+    #[arg(long, default_value_t = false)]
+    pub insecure: bool,
 }
 
 pub async fn run(args: McpBridgeArgs) -> ExitCode {
@@ -168,11 +175,13 @@ async fn build_client(args: &McpBridgeArgs) -> anyhow::Result<Client> {
     let identity = Identity::from_pem(&identity_pem)?;
     let ca = Certificate::from_pem(&ca_pem)?;
 
-    let client = Client::builder()
+    let mut builder = Client::builder()
         .use_rustls_tls()
         .identity(identity)
         .add_root_certificate(ca)
-        .timeout(Duration::from_secs(args.timeout_secs))
-        .build()?;
-    Ok(client)
+        .timeout(Duration::from_secs(args.timeout_secs));
+    if args.insecure {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    Ok(builder.build()?)
 }
