@@ -18,7 +18,7 @@ path = "src/main.rs"
 # Path-dep on warden-sdk (sibling repo, not a Cargo workspace).
 warden-sdk = { path = "../warden-sdk" }
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-std", "io-util"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
