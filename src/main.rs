@@ -60,6 +60,12 @@ enum Command {
     /// starter pack. `list` shows what's available; `generate <name>`
     /// writes one to stdout or `--output FILE`.
     GeneratePolicy(cmd::policy::PolicyArgs),
+    /// Policy Lab: replay a draft Rego rule against the last N days
+    /// of real ledger traffic + the chaos catalog before publishing.
+    /// `wardenctl policy test <file.rego>` is the CI-friendly form;
+    /// pass `--fail-on-regression` to exit non-zero on catalog
+    /// regressions.
+    Policy(cmd::policy_lab::PolicyArgs),
     /// Authenticate against `warden-identity`, manage cached creds.
     Auth(cmd::auth::AuthArgs),
     /// Read-only access to the registered agents table. Writes
@@ -99,6 +105,7 @@ async fn run(cli: Cli) -> ExitCode {
         Command::Init(args) => cmd::init::run(args).await,
         Command::Doctor(args) => cmd::doctor::run(args).await,
         Command::GeneratePolicy(args) => cmd::policy::run(args).await,
+        Command::Policy(args) => cmd::policy_lab::run(args).await,
         Command::Auth(args) => cmd::auth::run(args, cli.identity_url).await,
         Command::Agents(args) => cmd::agents::run(args, cli.identity_url).await,
         // `regulatory` doesn't take an --identity-url; it talks

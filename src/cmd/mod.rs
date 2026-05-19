@@ -9,4 +9,5 @@ pub mod init;
 pub mod mcp_bridge;
 pub mod migrate;
 pub mod policy;
+pub mod policy_lab;
 pub mod regulatory;
