@@ -101,6 +101,31 @@ pub struct LearnArgs {
     /// or `http://localhost:8082`).
     #[arg(long)]
     pub policy_url: Option<String>,
+    /// Client cert (PEM) for the outbound mTLS handshake. Required to
+    /// reach the ledger's `/audit/replay/corpus` (operator-only) and
+    /// the policy-engine's mTLS app-listener. Pair with `--client-key`
+    /// and `--ca-cert`. Without these the CLI falls back to plain HTTP
+    /// and gets a 404 on the corpus pull in any locked-down env.
+    #[arg(long)]
+    pub client_cert: Option<PathBuf>,
+    /// Client key (PEM) — sibling of `--client-cert`.
+    #[arg(long)]
+    pub client_key: Option<PathBuf>,
+    /// CA cert (PEM) used to verify the server cert on outbound mTLS
+    /// hops. Should match the env's CA bundle (warden-proxy/certs/ca.crt
+    /// for prod, certs-dev/ca.crt for dev).
+    #[arg(long)]
+    pub ca_cert: Option<PathBuf>,
+    /// Map a docker-internal hostname to a host:port. Repeatable.
+    /// Mirrors `curl --resolve NAME:PORT:ADDR`. Use this when running
+    /// wardenctl from the host against a compose stack — the cert
+    /// SANs target `ledger` / `policy-engine`, but those don't resolve
+    /// outside the docker network.
+    ///
+    /// Format: `<name>:<port>:<ip>`. Example:
+    /// `--resolve ledger:18183:127.0.0.1 --resolve policy-engine:18082:127.0.0.1`.
+    #[arg(long = "resolve")]
+    pub resolve: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -567,6 +592,31 @@ async fn run_learn(args: LearnArgs) -> ExitCode {
         .or_else(|| std::env::var("WARDEN_POLICY_URL").ok())
         .unwrap_or_else(|| "http://localhost:8082".into());
 
+    let resolve_pairs = match parse_resolve(&args.resolve) {
+        Ok(p) => p,
+        Err(msg) => {
+            eprintln!("error: --resolve: {}", msg);
+            return ExitCode::Validation;
+        }
+    };
+
+    // Build an mTLS reqwest::Client if all three cert paths are
+    // supplied. Operator routes (`/audit/replay/corpus`,
+    // `/policies/mine`) are mTLS-only in any locked-down env; without
+    // the certs the CLI runs against plain-HTTP test envs only.
+    let mtls_client = match build_mtls_client(
+        args.client_cert.as_deref(),
+        args.client_key.as_deref(),
+        args.ca_cert.as_deref(),
+        &resolve_pairs,
+    ) {
+        Ok(c) => c,
+        Err(msg) => {
+            eprintln!("error: {}", msg);
+            return ExitCode::Validation;
+        }
+    };
+
     let ledger = match LedgerClient::new(&ledger_url) {
         Ok(c) => c,
         Err(e) => {
@@ -574,12 +624,22 @@ async fn run_learn(args: LearnArgs) -> ExitCode {
             return ExitCode::Validation;
         }
     };
+    let ledger = if let Some(c) = mtls_client.clone() {
+        ledger.with_http_client(c)
+    } else {
+        ledger
+    };
     let policy = match PoliciesClient::new(&policy_url) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("error: policy url {}: {}", policy_url, e);
             return ExitCode::Validation;
         }
+    };
+    let policy = if let Some(c) = mtls_client {
+        policy.with_http_client(c)
+    } else {
+        policy
     };
 
     // Pull the corpus first — the miner only sees what the ledger
@@ -719,14 +779,22 @@ fn render_learn_summary(resp: &MineResponse, corpus_returned: i64, window: &str)
 async fn accept_candidate(
     policy: &PoliciesClient,
     resp: &MineResponse,
-    candidate_id: &str,
+    target: &str,
 ) -> ExitCode {
-    let Some(c) = resp.candidates.iter().find(|c| c.id == candidate_id) else {
+    // Match against rule_name OR ephemeral id. Rule_name is the
+    // stable surface — ids regenerate per mine run, so a script that
+    // pipes `--json | jq .id` into `--accept` only works if both
+    // calls happen in the same run. Rule_name avoids that footgun.
+    let Some(c) = resp
+        .candidates
+        .iter()
+        .find(|c| c.rule_name == target || c.id == target)
+    else {
         eprintln!(
-            "error: candidate id {} not found in current mine result. \
-             Re-run `wardenctl policy learn` and pick from this run's ids \
-             (they're regenerated each call).",
-            candidate_id
+            "error: candidate {} not found in this mine result. \
+             Re-run with `--json` to see this run's rule names + ids, \
+             then pass either to --accept.",
+            target
         );
         return ExitCode::Validation;
     };
@@ -777,6 +845,76 @@ async fn create_draft(policy: &PoliciesClient, c: &MineCandidate) -> ExitCode {
             eprintln!("error: create draft {}: {}", c.rule_name, e);
             ExitCode::from_warden_error(&e)
         }
+    }
+}
+
+/// Parse `--resolve NAME:PORT:ADDR` flags into a vector the reqwest
+/// builder can fold into `resolve_to_addrs`. Mirrors curl's syntax.
+fn parse_resolve(raw: &[String]) -> Result<Vec<(String, std::net::SocketAddr)>, String> {
+    let mut out = Vec::with_capacity(raw.len());
+    for r in raw {
+        // Split from the right twice — the name itself can't contain
+        // a colon, but the IPv4 form is unambiguous.
+        let mut parts = r.rsplitn(3, ':');
+        let ip = parts.next().ok_or_else(|| format!("malformed: {}", r))?;
+        let port = parts.next().ok_or_else(|| format!("malformed: {}", r))?;
+        let name = parts.next().ok_or_else(|| format!("malformed: {}", r))?;
+        let port: u16 = port
+            .parse()
+            .map_err(|e| format!("malformed port in {}: {}", r, e))?;
+        let ip: std::net::IpAddr = ip
+            .parse()
+            .map_err(|e| format!("malformed ip in {}: {}", r, e))?;
+        out.push((name.to_string(), std::net::SocketAddr::new(ip, port)));
+    }
+    Ok(out)
+}
+
+/// Construct a `reqwest::Client` configured for outbound mTLS when
+/// all three cert paths are supplied. Returns `Ok(None)` when none
+/// are supplied (CLI runs against plain-HTTP test envs). Any partial
+/// combo (e.g. cert without key) is rejected at the boundary so we
+/// don't silently fall back to plain HTTP in a locked-down env.
+fn build_mtls_client(
+    cert: Option<&std::path::Path>,
+    key: Option<&std::path::Path>,
+    ca: Option<&std::path::Path>,
+    resolve: &[(String, std::net::SocketAddr)],
+) -> Result<Option<reqwest::Client>, String> {
+    match (cert, key, ca) {
+        (None, None, None) => Ok(None),
+        (Some(cert), Some(key), Some(ca)) => {
+            let cert_pem = std::fs::read(cert)
+                .map_err(|e| format!("read client cert {}: {}", cert.display(), e))?;
+            let key_pem = std::fs::read(key)
+                .map_err(|e| format!("read client key {}: {}", key.display(), e))?;
+            let ca_pem = std::fs::read(ca)
+                .map_err(|e| format!("read ca cert {}: {}", ca.display(), e))?;
+            let mut combined = cert_pem.clone();
+            if !combined.ends_with(b"\n") {
+                combined.push(b'\n');
+            }
+            combined.extend_from_slice(&key_pem);
+            let identity = reqwest::Identity::from_pem(&combined)
+                .map_err(|e| format!("invalid client identity PEM: {}", e))?;
+            let ca_cert = reqwest::Certificate::from_pem(&ca_pem)
+                .map_err(|e| format!("invalid CA cert PEM: {}", e))?;
+            let mut builder = reqwest::Client::builder()
+                .use_rustls_tls()
+                .identity(identity)
+                .add_root_certificate(ca_cert);
+            for (name, addr) in resolve {
+                builder = builder.resolve_to_addrs(name, &[*addr]);
+            }
+            let client = builder
+                .build()
+                .map_err(|e| format!("build mtls client: {}", e))?;
+            Ok(Some(client))
+        }
+        _ => Err(
+            "--client-cert, --client-key, and --ca-cert must all be supplied together"
+                .to_string(),
+        ),
     }
 }
 
