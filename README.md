@@ -198,6 +198,26 @@ Get a single agent, human-readable:
 wardenctl agents get 01HW...A001 --tenant acme
 ```
 
+## Connect an MCP client
+
+`wardenctl mcp-bridge` is the stdio shim every MCP client uses to
+ride the proxy. The same bridge serves Claude Code, Cursor, Cline,
+Continue, the Codex CLI, and any generic stdio MCP client — only
+the per-client config-file shape differs.
+
+Recipes for each supported client live in [`docs/clients/`](docs/clients/):
+
+- [Claude Code](docs/clients/claude-code.md)
+- [Cursor](docs/clients/cursor.md)
+- [Cline (VS Code)](docs/clients/cline.md)
+- [Continue.dev](docs/clients/continue.md)
+- [OpenAI Codex CLI](docs/clients/codex.md)
+- [Generic stdio MCP](docs/clients/generic-stdio.md)
+
+The bridge accepts `--client-hint <name>` for diagnostics and to
+reserve the surface for future per-client behavior — recipes pass it
+for forward-compat.
+
 ## Development
 
 ```sh

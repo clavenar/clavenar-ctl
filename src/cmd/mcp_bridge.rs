@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use clap::Args;
+use clap::{Args, ValueEnum};
 use reqwest::{Certificate, Client, Identity};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -55,9 +55,51 @@ pub struct McpBridgeArgs {
     /// proper SANs; do not pass this flag there.
     #[arg(long, default_value_t = false)]
     pub insecure: bool,
+    /// Which MCP client is dialing the bridge. Today the bridge passes
+    /// JSON-RPC frames verbatim and works for every supported client;
+    /// the hint is logged to stderr for diagnostics and reserves the
+    /// flag for future per-client quirks (see
+    /// `warden-ctl/docs/clients/`). Unknown values are rejected at
+    /// arg-parse time.
+    #[arg(long, value_enum)]
+    pub client_hint: Option<ClientHint>,
+}
+
+/// Known MCP clients with shipped connection recipes. Adding a variant
+/// here is the canonical place to wire a new client into the bridge
+/// once a quirk needs to branch.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ClientHint {
+    ClaudeCode,
+    Cursor,
+    Cline,
+    Continue,
+    Codex,
+    Generic,
+}
+
+impl ClientHint {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ClientHint::ClaudeCode => "claude-code",
+            ClientHint::Cursor => "cursor",
+            ClientHint::Cline => "cline",
+            ClientHint::Continue => "continue",
+            ClientHint::Codex => "codex",
+            ClientHint::Generic => "generic",
+        }
+    }
 }
 
 pub async fn run(args: McpBridgeArgs) -> ExitCode {
+    if let Some(hint) = args.client_hint {
+        // Logged so an operator inspecting bridge stderr (or a tee'd
+        // wrapper script — see warden-ctl/docs/clients/) can confirm
+        // the client recipe was applied. No behavioral divergence
+        // today; the variant exists so per-hint quirks can land
+        // without re-plumbing the CLI surface.
+        eprintln!("mcp-bridge: client-hint={}", hint.as_str());
+    }
     let client = match build_client(&args).await {
         Ok(c) => c,
         Err(e) => {
