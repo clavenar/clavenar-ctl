@@ -445,6 +445,11 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
         v.push(e);
     }
     v.push(base("wire_transfer", 0.05));
+    // Allow baselines: business-hours bulk_export, plain read_only.
+    // These let an `Allow → Deny` flip surface when the candidate
+    // tightens policy beyond what the active engine catches.
+    v.push(base("bulk_export", 0.05));
+    v.push(base("read_only", 0.05));
     v
 }
 
