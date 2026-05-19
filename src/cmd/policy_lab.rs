@@ -460,6 +460,29 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
         );
         v.push(e);
     }
+    // PHI export with 250-patient batch — modeled on the
+    // clinical-bot persona's prod traffic. Active engine routes
+    // it to HIL Yellow (review). A candidate capping
+    // patient_count > 100 surfaces in the after-reasons.
+    {
+        let mut e = base("phi_export", 0.05);
+        e["agent_spiffe"] = serde_json::json!(
+            "spiffe://warden.local/tenant/acme/agent/clinical/instance/1"
+        );
+        e["arguments"] = serde_json::json!({
+            "patient_count": 250,
+            "fields": ["mrn", "dob", "dx_code"],
+            "destination": "s3://ehr-exports/batch",
+        });
+        e["attestation"] = serde_json::json!({
+            "kind": "dev-mock",
+            "measurement": "dev-binary-hash",
+            "issued_at": "2026-04-29T13:55:00Z",
+            "expires_at": "2026-04-29T14:10:00Z",
+            "nonce_echo": "warden-mock-nonce",
+        });
+        v.push(e);
+    }
     v
 }
 
