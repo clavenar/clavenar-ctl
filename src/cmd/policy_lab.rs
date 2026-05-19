@@ -450,6 +450,16 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
     // tightens policy beyond what the active engine catches.
     v.push(base("bulk_export", 0.05));
     v.push(base("read_only", 0.05));
+    // Attestation-gated SPIFFE'd delete_repo — Deny under the active
+    // engine via attestation.rego. A candidate that strips
+    // attestation flips it to Allow (the canonical regression demo).
+    {
+        let mut e = base("delete_repo", 0.05);
+        e["agent_spiffe"] = serde_json::json!(
+            "spiffe://warden.local/tenant/acme/agent/del/instance/x"
+        );
+        v.push(e);
+    }
     v
 }
 
