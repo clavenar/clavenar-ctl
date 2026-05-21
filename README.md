@@ -11,6 +11,11 @@ Naming follows the kubectl pattern: the **crate / repo** is `warden-ctl`
 typed-on-the-command-line every day). After `cargo install warden-ctl`
 you run `wardenctl ...`.
 
+Sequence diagrams for the five primary subcommands — `auth login`,
+`agents <lifecycle-verb>`, `agents create --if-absent`,
+`policy test`, and `mcp-bridge` — live in
+[`docs/SEQUENCES.md`](docs/SEQUENCES.md).
+
 ## Status
 
 Onboarding read + write surfaces all shipped. The full RFC
