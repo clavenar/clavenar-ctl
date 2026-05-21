@@ -10,4 +10,6 @@ pub mod mcp_bridge;
 pub mod migrate;
 pub mod policy;
 pub mod policy_lab;
+pub mod policy_library;
+pub mod policy_scaffold;
 pub mod regulatory;

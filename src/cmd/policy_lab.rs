@@ -55,6 +55,13 @@ pub enum PolicyAction {
     /// Brain-rendered explanation. `--accept <id>` lands the named
     /// candidate as an inactive draft policy.
     Learn(LearnArgs),
+    /// Emit a fresh starter Rego template with frontmatter
+    /// pre-filled. Pure filesystem work — no policy-engine call.
+    Scaffold(crate::cmd::policy_scaffold::ScaffoldArgs),
+    /// Browse and install templates from the policy-engine's
+    /// on-disk catalog (`/policies/templates*`). The console-side
+    /// equivalent is the `/policies/library` page.
+    Library(crate::cmd::policy_library::LibraryArgs),
 }
 
 #[derive(Debug, Args)]
@@ -198,6 +205,8 @@ pub async fn run(args: PolicyArgs) -> ExitCode {
     match args.action {
         PolicyAction::Test(a) => run_test(a).await,
         PolicyAction::Learn(a) => run_learn(a).await,
+        PolicyAction::Scaffold(a) => crate::cmd::policy_scaffold::run(a),
+        PolicyAction::Library(a) => crate::cmd::policy_library::run(a).await,
     }
 }
 
