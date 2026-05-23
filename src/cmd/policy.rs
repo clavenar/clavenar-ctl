@@ -21,37 +21,37 @@ pub const TEMPLATES: &[(&str, &str, &str)] = &[
     (
         "pii_egress",
         "Deny PII-carrying egress tools (send_email, http_post, upload_file, webhook_send).",
-        include_str!("../../../warden-policy-engine/policies/templates/pii_egress.rego"),
+        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/pii_egress.rego"),
     ),
     (
         "prod_db_writes",
         "Deny write-shaped database tools against production.",
-        include_str!("../../../warden-policy-engine/policies/templates/prod_db_writes.rego"),
+        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/prod_db_writes.rego"),
     ),
     (
         "money_moves",
         "Review small transfers, deny bulk-money tool variants.",
-        include_str!("../../../warden-policy-engine/policies/templates/money_moves.rego"),
+        include_str!("../../../warden-policy-engine/policies/templates/finance/money_moves.rego"),
     ),
     (
         "agent_impersonation",
         "Deny identity-modifying tools without attestation.",
-        include_str!("../../../warden-policy-engine/policies/templates/agent_impersonation.rego"),
+        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/agent_impersonation.rego"),
     ),
     (
         "prompt_injection",
         "Hard-deny when Brain reports high intent_score, regardless of tool.",
-        include_str!("../../../warden-policy-engine/policies/templates/prompt_injection.rego"),
+        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/prompt_injection.rego"),
     ),
     (
         "off_hours_actions",
         "Review high-impact tools outside business hours (Mon-Fri 09-17 UTC).",
-        include_str!("../../../warden-policy-engine/policies/templates/off_hours_actions.rego"),
+        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/off_hours_actions.rego"),
     ),
     (
         "rate_limit_review",
         "Softer rate-limit threshold that parks for review before hard-denying.",
-        include_str!("../../../warden-policy-engine/policies/templates/rate_limit_review.rego"),
+        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/rate_limit_review.rego"),
     ),
 ];
 
