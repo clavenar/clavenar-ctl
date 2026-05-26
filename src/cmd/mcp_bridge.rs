@@ -27,7 +27,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct McpBridgeArgs {
+pub(crate) struct McpBridgeArgs {
     /// Proxy base URL (origin only — the bridge appends `/mcp`).
     /// Dev: `https://localhost:19443`. Prod: `https://localhost:8443`.
     #[arg(long)]
@@ -69,7 +69,7 @@ pub struct McpBridgeArgs {
 /// here is the canonical place to wire a new client into the bridge
 /// once a quirk needs to branch.
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum ClientHint {
+pub(crate) enum ClientHint {
     ClaudeCode,
     Cursor,
     Cline,
@@ -79,7 +79,7 @@ pub enum ClientHint {
 }
 
 impl ClientHint {
-    pub fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             ClientHint::ClaudeCode => "claude-code",
             ClientHint::Cursor => "cursor",
@@ -91,7 +91,7 @@ impl ClientHint {
     }
 }
 
-pub async fn run(args: McpBridgeArgs) -> ExitCode {
+pub(crate) async fn run(args: McpBridgeArgs) -> ExitCode {
     if let Some(hint) = args.client_hint {
         // Logged so an operator inspecting bridge stderr (or a tee'd
         // wrapper script — see warden-ctl/docs/clients/) can confirm

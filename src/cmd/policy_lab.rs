@@ -37,13 +37,13 @@ use warden_sdk::{
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct PolicyArgs {
+pub(crate) struct PolicyArgs {
     #[command(subcommand)]
     pub action: PolicyAction,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum PolicyAction {
+pub(crate) enum PolicyAction {
     /// Replay a candidate Rego rule against the last N days of real
     /// ledger traffic AND against the chaos catalog (the 40-attack
     /// catalogued corpus). Reports the per-input verdict diff and
@@ -65,7 +65,7 @@ pub enum PolicyAction {
 }
 
 #[derive(Debug, Args)]
-pub struct LearnArgs {
+pub(crate) struct LearnArgs {
     /// Window to pull from the ledger. Default `7d`.
     #[arg(long, default_value = "7d")]
     pub since: String,
@@ -136,7 +136,7 @@ pub struct LearnArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct TestArgs {
+pub(crate) struct TestArgs {
     /// Path to a candidate `.rego` file.
     pub file: PathBuf,
     /// Override the candidate's name in compile-error messages.
@@ -189,19 +189,19 @@ pub struct TestArgs {
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum ModeArg {
+pub(crate) enum ModeArg {
     Add,
     Replace,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum AgainstArg {
+pub(crate) enum AgainstArg {
     Prod,
     Catalog,
     Both,
 }
 
-pub async fn run(args: PolicyArgs) -> ExitCode {
+pub(crate) async fn run(args: PolicyArgs) -> ExitCode {
     match args.action {
         PolicyAction::Test(a) => run_test(a).await,
         PolicyAction::Learn(a) => run_learn(a).await,
