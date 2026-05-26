@@ -17,13 +17,13 @@ use warden_sdk::{InstallTemplateRequest, PoliciesClient, PolicyTemplate, WardenE
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct LibraryArgs {
+pub(crate) struct LibraryArgs {
     #[command(subcommand)]
     pub action: LibraryAction,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum LibraryAction {
+pub(crate) enum LibraryAction {
     /// Print the catalog of on-disk starter templates available on
     /// the policy engine. Filter via repeated `--domain`,
     /// `--severity`, `--framework`, `--tier` flags; the result is the
@@ -35,7 +35,7 @@ pub enum LibraryAction {
 }
 
 #[derive(Debug, Args)]
-pub struct LibraryListArgs {
+pub(crate) struct LibraryListArgs {
     /// Filter by domain. Repeatable (multi-value AND across facets,
     /// OR within a facet — `--domain healthcare --domain finance`
     /// shows templates in either domain).
@@ -66,7 +66,7 @@ pub struct LibraryListArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct LibraryInstallArgs {
+pub(crate) struct LibraryInstallArgs {
     /// Template name (filename, e.g. `phi_egress.rego`).
     pub name: String,
     /// Why this install is happening. Persisted on the ledger row.
@@ -84,7 +84,7 @@ pub struct LibraryInstallArgs {
     pub policy_url: Option<String>,
 }
 
-pub async fn run(args: LibraryArgs) -> ExitCode {
+pub(crate) async fn run(args: LibraryArgs) -> ExitCode {
     match args.action {
         LibraryAction::List(a) => list(a).await,
         LibraryAction::Install(a) => install(a).await,

@@ -40,13 +40,13 @@ use crate::credentials;
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct AgentsArgs {
+pub(crate) struct AgentsArgs {
     #[command(subcommand)]
     pub command: AgentsCommand,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum AgentsCommand {
+pub(crate) enum AgentsCommand {
     /// List agents in a tenant.
     List(ListArgs),
     /// Look up one agent by id.
@@ -71,7 +71,7 @@ pub enum AgentsCommand {
 }
 
 #[derive(Debug, Args)]
-pub struct ListArgs {
+pub(crate) struct ListArgs {
     /// Tenant to list within. Falls back to `WARDEN_TENANT` env, then
     /// the config file's `default_tenant`.
     #[arg(long)]
@@ -88,7 +88,7 @@ pub struct ListArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct GetArgs {
+pub(crate) struct GetArgs {
     /// Agent uuidv7 (the value the server returns under `id`).
     pub id: String,
     /// Tenant the agent belongs to.
@@ -100,7 +100,7 @@ pub struct GetArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct CreateArgs {
+pub(crate) struct CreateArgs {
     #[arg(long)]
     pub tenant: Option<String>,
     /// Agent name. Must be unique within `(tenant, agent_name)` —
@@ -135,7 +135,7 @@ pub struct CreateArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct LifecycleArgs {
+pub(crate) struct LifecycleArgs {
     /// Agent uuidv7.
     pub id: String,
     #[arg(long)]
@@ -149,13 +149,13 @@ pub struct LifecycleArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct EnvelopeArgs {
+pub(crate) struct EnvelopeArgs {
     #[command(subcommand)]
     pub direction: EnvelopeDirection,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum EnvelopeDirection {
+pub(crate) enum EnvelopeDirection {
     /// Narrow the envelope (owner-team or admin). Pass the *full new
     /// envelope* — the server diffs against the current row.
     Narrow(EnvelopeChangeArgs),
@@ -164,7 +164,7 @@ pub enum EnvelopeDirection {
 }
 
 #[derive(Debug, Args)]
-pub struct EnvelopeChangeArgs {
+pub(crate) struct EnvelopeChangeArgs {
     pub id: String,
     #[arg(long)]
     pub tenant: Option<String>,
@@ -181,7 +181,7 @@ pub struct EnvelopeChangeArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct TransferArgs {
+pub(crate) struct TransferArgs {
     pub id: String,
     #[arg(long)]
     pub tenant: Option<String>,
@@ -194,7 +194,7 @@ pub struct TransferArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct DescriptionArgs {
+pub(crate) struct DescriptionArgs {
     pub id: String,
     #[arg(long)]
     pub tenant: Option<String>,
@@ -210,7 +210,7 @@ pub struct DescriptionArgs {
     pub json: bool,
 }
 
-pub async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitCode {
+pub(crate) async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitCode {
     let cfg = match config::load() {
         Ok(c) => c,
         Err(e) => {

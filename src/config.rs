@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use crate::ExitCode;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct Config {
+pub(crate) struct Config {
     /// Identity service base URL. Defaults to
     /// `http://localhost:8086` if unset everywhere.
     pub identity_url: Option<String>,
@@ -41,7 +41,7 @@ pub struct Config {
 
 /// Resolve the on-disk config-file path. Idempotent — does NOT touch
 /// the filesystem (creation is the caller's job, on save).
-pub fn config_path() -> Result<PathBuf> {
+pub(crate) fn config_path() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("dev", "agent-warden", "warden")
         .context("could not resolve OS config dir for warden")?;
     Ok(dirs.config_dir().join("config.toml"))
@@ -50,7 +50,7 @@ pub fn config_path() -> Result<PathBuf> {
 /// Load the config file, returning [`Config::default`] if it doesn't
 /// exist. A malformed file errors loudly (we'd rather surface the
 /// operator's typo than silently fall through to defaults).
-pub fn load() -> Result<Config> {
+pub(crate) fn load() -> Result<Config> {
     let path = config_path()?;
     if !path.exists() {
         return Ok(Config::default());
@@ -65,7 +65,7 @@ pub fn load() -> Result<Config> {
 /// Resolve the identity URL using the spec'd precedence chain.
 /// `cli_override` is the per-call `--identity-url` flag; `env_override`
 /// is the captured `WARDEN_IDENTITY_URL` value.
-pub fn resolve_identity_url(
+pub(crate) fn resolve_identity_url(
     cli_override: Option<&str>,
     env_override: Option<&str>,
     cfg: &Config,
@@ -81,7 +81,7 @@ pub fn resolve_identity_url(
 /// config file's `default_tenant`. Returns `Validation` on missing
 /// after emitting the operator-actionable error message — keeps the
 /// "where's tenant supposed to come from?" hint in one place.
-pub fn resolve_tenant(arg: Option<String>, cfg: &Config) -> Result<String, ExitCode> {
+pub(crate) fn resolve_tenant(arg: Option<String>, cfg: &Config) -> Result<String, ExitCode> {
     arg.or_else(|| std::env::var("WARDEN_TENANT").ok())
         .or_else(|| cfg.default_tenant.clone())
         .ok_or_else(|| {

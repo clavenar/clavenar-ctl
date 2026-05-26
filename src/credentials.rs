@@ -37,7 +37,7 @@ use std::path::PathBuf;
 
 /// One cached credential per tenant.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TenantCredential {
+pub(crate) struct TenantCredential {
     pub id_token: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub refresh_token: Option<String>,
@@ -58,7 +58,7 @@ pub struct TenantCredential {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct Credentials {
+pub(crate) struct Credentials {
     #[serde(default)]
     pub tenants: BTreeMap<String, TenantCredential>,
 }
@@ -69,7 +69,7 @@ pub struct Credentials {
 /// fall back to `ProjectDirs` (Linux: `~/.config/warden/credentials.json`,
 /// macOS: `~/Library/Application Support/dev.agent-warden.warden/...`,
 /// Windows: `%APPDATA%/warden/...`).
-pub fn credentials_path() -> Result<PathBuf> {
+pub(crate) fn credentials_path() -> Result<PathBuf> {
     if let Ok(p) = std::env::var("WARDEN_CREDENTIALS_PATH") {
         return Ok(PathBuf::from(p));
     }
@@ -79,7 +79,7 @@ pub fn credentials_path() -> Result<PathBuf> {
 }
 
 /// Load the cached creds, returning an empty bag if no file exists.
-pub fn load() -> Result<Credentials> {
+pub(crate) fn load() -> Result<Credentials> {
     let path = credentials_path()?;
     if !path.exists() {
         return Ok(Credentials::default());
@@ -95,7 +95,7 @@ pub fn load() -> Result<Credentials> {
 /// doesn't exist; on Unix the file is opened with mode `0600` *atomically
 /// with create*, so a fresh install never has a window where the bearer
 /// is world-readable under the default umask.
-pub fn save(creds: &Credentials) -> Result<()> {
+pub(crate) fn save(creds: &Credentials) -> Result<()> {
     let path = credentials_path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -139,7 +139,7 @@ fn write_0600(path: &std::path::Path, body: &[u8]) -> std::io::Result<()> {
 /// the server is the authoritative claim enforcer; this struct exists
 /// only for local display (`whoami`) and bookkeeping.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct UnverifiedClaims {
+pub(crate) struct UnverifiedClaims {
     pub sub: Option<String>,
     pub issuer: Option<String>,
     pub exp: Option<DateTime<Utc>>,
@@ -150,7 +150,7 @@ pub struct UnverifiedClaims {
 /// verifier; this is for `whoami` display and for prefilling the
 /// `created_by_sub` audit field on `agents create` from the
 /// cached creds without re-parsing the JWT on every call.
-pub fn unverified_decode(id_token: &str) -> Result<UnverifiedClaims> {
+pub(crate) fn unverified_decode(id_token: &str) -> Result<UnverifiedClaims> {
     use base64::{engine::general_purpose, Engine as _};
     let parts: Vec<&str> = id_token.split('.').collect();
     if parts.len() != 3 {
@@ -174,7 +174,7 @@ pub fn unverified_decode(id_token: &str) -> Result<UnverifiedClaims> {
 
 /// Look up the bearer for `tenant`, returning a sentinel error rather
 /// than panicking when the user hasn't run `auth login` yet.
-pub fn bearer_for(creds: &Credentials, tenant: &str) -> Result<String> {
+pub(crate) fn bearer_for(creds: &Credentials, tenant: &str) -> Result<String> {
     creds
         .tenants
         .get(tenant)

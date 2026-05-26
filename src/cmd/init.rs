@@ -15,7 +15,7 @@ use crate::config::{config_path, Config};
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct InitArgs {
+pub(crate) struct InitArgs {
     /// Identity service base URL to write into the scaffolded config.
     /// Default `http://localhost:8086` matches the dev compose port.
     #[arg(long)]
@@ -58,7 +58,7 @@ pub struct InitArgs {
     pub force: bool,
 }
 
-pub async fn run(args: InitArgs) -> ExitCode {
+pub(crate) async fn run(args: InitArgs) -> ExitCode {
     let cfg_path = match config_path() {
         Ok(p) => p,
         Err(e) => {

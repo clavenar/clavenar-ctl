@@ -20,13 +20,13 @@ use crate::credentials::{self, TenantCredential};
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct AuthArgs {
+pub(crate) struct AuthArgs {
     #[command(subcommand)]
     pub command: AuthCommand,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum AuthCommand {
+pub(crate) enum AuthCommand {
     /// Cache an OIDC id_token for a tenant.
     Login(LoginArgs),
     /// Drop the cached entry for a tenant.
@@ -36,7 +36,7 @@ pub enum AuthCommand {
 }
 
 #[derive(Debug, Args)]
-pub struct LoginArgs {
+pub(crate) struct LoginArgs {
     /// Tenant identifier as configured in the identity service.
     #[arg(long)]
     pub tenant: String,
@@ -51,13 +51,13 @@ pub struct LoginArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct LogoutArgs {
+pub(crate) struct LogoutArgs {
     #[arg(long)]
     pub tenant: String,
 }
 
 #[derive(Debug, Args)]
-pub struct WhoamiArgs {
+pub(crate) struct WhoamiArgs {
     #[arg(long)]
     pub tenant: String,
     /// Emit JSON instead of `sub <iss>`.
@@ -65,7 +65,7 @@ pub struct WhoamiArgs {
     pub json: bool,
 }
 
-pub async fn run(args: AuthArgs, _identity_url: Option<String>) -> ExitCode {
+pub(crate) async fn run(args: AuthArgs, _identity_url: Option<String>) -> ExitCode {
     match args.command {
         AuthCommand::Login(a) => login(a).await,
         AuthCommand::Logout(a) => logout(a),

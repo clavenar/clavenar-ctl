@@ -37,19 +37,19 @@ use warden_sdk::{LedgerClient, RegulatoryExportOptions};
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct RegulatoryArgs {
+pub(crate) struct RegulatoryArgs {
     #[command(subcommand)]
     pub command: RegulatoryCommand,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum RegulatoryCommand {
+pub(crate) enum RegulatoryCommand {
     /// Build a regulatory `.tar.gz` for the time window `[from, to)`.
     Export(ExportArgs),
 }
 
 #[derive(Debug, Args)]
-pub struct ExportArgs {
+pub(crate) struct ExportArgs {
     /// Lower window bound, inclusive. RFC 3339, e.g.
     /// `2026-04-01T00:00:00Z`.
     #[arg(long)]
@@ -86,7 +86,7 @@ pub struct ExportArgs {
     pub output: PathBuf,
 }
 
-pub async fn run(args: RegulatoryArgs) -> ExitCode {
+pub(crate) async fn run(args: RegulatoryArgs) -> ExitCode {
     match args.command {
         RegulatoryCommand::Export(a) => export(a).await,
     }

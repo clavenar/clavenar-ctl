@@ -17,7 +17,7 @@ use crate::ExitCode;
 /// `(name, one-line summary, body)`. Public so `cmd::init` can write
 /// the full set into a scaffolded `policies/templates/` directory
 /// without duplicating the table.
-pub const TEMPLATES: &[(&str, &str, &str)] = &[
+pub(crate) const TEMPLATES: &[(&str, &str, &str)] = &[
     (
         "pii_egress",
         "Deny PII-carrying egress tools (send_email, http_post, upload_file, webhook_send).",
@@ -56,13 +56,13 @@ pub const TEMPLATES: &[(&str, &str, &str)] = &[
 ];
 
 #[derive(Debug, Args)]
-pub struct PolicyArgs {
+pub(crate) struct PolicyArgs {
     #[command(subcommand)]
     pub action: PolicyAction,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum PolicyAction {
+pub(crate) enum PolicyAction {
     /// List every available template and its one-line summary.
     List {
         /// JSON output (`[{name, summary}, …]`) for scripting.
@@ -84,7 +84,7 @@ pub enum PolicyAction {
     },
 }
 
-pub async fn run(args: PolicyArgs) -> ExitCode {
+pub(crate) async fn run(args: PolicyArgs) -> ExitCode {
     match args.action {
         PolicyAction::List { json } => list(json),
         PolicyAction::Generate { name, output, force } => generate(&name, output, force),

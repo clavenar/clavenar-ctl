@@ -48,3 +48,6 @@ tempfile = "3"
 # spec §9.3.
 assert_cmd = "2"
 predicates = "3"
+
+[lints.rust]
+unreachable_pub = "warn"

@@ -16,7 +16,7 @@ use clap::Args;
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct DoctorArgs {
+pub(crate) struct DoctorArgs {
     /// Override the identity URL (default config / env / built-in).
     #[arg(long)]
     pub identity_url: Option<String>,
@@ -112,7 +112,7 @@ fn pick_url(
     (defaults_lookup(service).to_string(), false)
 }
 
-pub async fn run(args: DoctorArgs) -> ExitCode {
+pub(crate) async fn run(args: DoctorArgs) -> ExitCode {
     let timeout = Duration::from_secs(args.timeout_secs);
     // Permissive TLS verifier: the proxy ships with self-signed dev
     // certs by default. Production operators who care can pass

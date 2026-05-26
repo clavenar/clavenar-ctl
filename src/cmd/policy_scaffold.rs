@@ -19,7 +19,7 @@ use clap::Args;
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct ScaffoldArgs {
+pub(crate) struct ScaffoldArgs {
     /// Template name (filename slug without `.rego`).
     #[arg(long)]
     pub name: String,
@@ -60,7 +60,7 @@ pub struct ScaffoldArgs {
     pub stdout: bool,
 }
 
-pub fn run(args: ScaffoldArgs) -> ExitCode {
+pub(crate) fn run(args: ScaffoldArgs) -> ExitCode {
     let tools: Vec<String> = split_csv(&args.tool_surface);
     if tools.is_empty() {
         eprintln!("error: --tool-surface must list at least one MCP tool name.");

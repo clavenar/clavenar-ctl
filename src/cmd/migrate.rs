@@ -58,7 +58,7 @@ use crate::credentials;
 use crate::ExitCode;
 
 #[derive(Debug, Args)]
-pub struct MigrateArgs {
+pub(crate) struct MigrateArgs {
     /// Tenant to migrate within. Falls back to `WARDEN_TENANT`, then
     /// the config's `default_tenant`.
     #[arg(long)]
@@ -117,7 +117,7 @@ struct Outcome {
     error: Option<String>,
 }
 
-pub async fn run(args: MigrateArgs, cfg: &config::Config, url: &str) -> ExitCode {
+pub(crate) async fn run(args: MigrateArgs, cfg: &config::Config, url: &str) -> ExitCode {
     let tenant = match config::resolve_tenant(args.tenant.clone(), cfg) {
         Ok(t) => t,
         Err(c) => return c,
