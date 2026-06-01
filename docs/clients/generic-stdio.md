@@ -1,4 +1,4 @@
-# Generic stdio MCP client → Agent Warden
+# Generic stdio MCP client → Clavenar
 
 Any client that speaks the MCP `2024-11-05` or `2025-11-25` protocol
 over stdio can ride the bridge. This recipe is the fallback for
@@ -7,11 +7,11 @@ testing without a real client at all.
 
 ## Manual stdio session
 
-`wardenctl mcp-bridge` reads JSON-RPC frames from stdin and writes
+`clavenarctl mcp-bridge` reads JSON-RPC frames from stdin and writes
 responses to stdout. Drive it by hand:
 
 ```bash
-wardenctl mcp-bridge \
+clavenarctl mcp-bridge \
   --url   https://localhost:19443 \
   --cert  ./certs-dev/client.crt \
   --key   ./certs-dev/client.key \
@@ -37,7 +37,7 @@ import json, subprocess, sys
 
 p = subprocess.Popen(
     [
-        "wardenctl", "mcp-bridge",
+        "clavenarctl", "mcp-bridge",
         "--url",   "https://localhost:19443",
         "--cert",  "/path/to/client.crt",
         "--key",   "/path/to/client.key",
@@ -74,7 +74,7 @@ your client is responsible for:
   frame lacking an `id` are fire-and-forget; the bridge POSTs them
   upstream but writes nothing to stdout.
 - **Initialize handshake.** Send `initialize` first; the upstream
-  `warden-init-stub` echoes your client's `protocolVersion` so you
+  `clavenar-init-stub` echoes your client's `protocolVersion` so you
   can negotiate whichever version your client supports.
 
 ## Troubleshooting

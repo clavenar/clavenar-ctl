@@ -1,10 +1,10 @@
-//! `wardenctl generate-policy` — emit a Rego template from the
-//! warden-policy-engine starter pack. Templates are embedded at
+//! `clavenarctl generate-policy` — emit a Rego template from the
+//! clavenar-policy-engine starter pack. Templates are embedded at
 //! compile time via `include_str!` against the sibling repo, so the
 //! shipped binary carries the rules without an FS dependency.
 //!
-//! `wardenctl generate-policy list` shows what's available;
-//! `wardenctl generate-policy <name>` writes to stdout by default
+//! `clavenarctl generate-policy list` shows what's available;
+//! `clavenarctl generate-policy <name>` writes to stdout by default
 //! (so operators can pipe into a file), or to `--output FILE` when
 //! pinning into a policy directory.
 
@@ -21,37 +21,37 @@ pub(crate) const TEMPLATES: &[(&str, &str, &str)] = &[
     (
         "pii_egress",
         "Deny PII-carrying egress tools (send_email, http_post, upload_file, webhook_send).",
-        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/pii_egress.rego"),
+        include_str!("../../../clavenar-policy-engine/policies/templates/cross-cutting/pii_egress.rego"),
     ),
     (
         "prod_db_writes",
         "Deny write-shaped database tools against production.",
-        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/prod_db_writes.rego"),
+        include_str!("../../../clavenar-policy-engine/policies/templates/cross-cutting/prod_db_writes.rego"),
     ),
     (
         "money_moves",
         "Review small transfers, deny bulk-money tool variants.",
-        include_str!("../../../warden-policy-engine/policies/templates/finance/money_moves.rego"),
+        include_str!("../../../clavenar-policy-engine/policies/templates/finance/money_moves.rego"),
     ),
     (
         "agent_impersonation",
         "Deny identity-modifying tools without attestation.",
-        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/agent_impersonation.rego"),
+        include_str!("../../../clavenar-policy-engine/policies/templates/cross-cutting/agent_impersonation.rego"),
     ),
     (
         "prompt_injection",
         "Hard-deny when Brain reports high intent_score, regardless of tool.",
-        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/prompt_injection.rego"),
+        include_str!("../../../clavenar-policy-engine/policies/templates/cross-cutting/prompt_injection.rego"),
     ),
     (
         "off_hours_actions",
         "Review high-impact tools outside business hours (Mon-Fri 09-17 UTC).",
-        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/off_hours_actions.rego"),
+        include_str!("../../../clavenar-policy-engine/policies/templates/cross-cutting/off_hours_actions.rego"),
     ),
     (
         "rate_limit_review",
         "Softer rate-limit threshold that parks for review before hard-denying.",
-        include_str!("../../../warden-policy-engine/policies/templates/cross-cutting/rate_limit_review.rego"),
+        include_str!("../../../clavenar-policy-engine/policies/templates/cross-cutting/rate_limit_review.rego"),
     ),
 ];
 
@@ -72,7 +72,7 @@ pub(crate) enum PolicyAction {
     /// Emit the named template. Defaults to stdout; `--output PATH`
     /// writes to a file.
     Generate {
-        /// Template name (e.g. `pii_egress`). Run `wardenctl
+        /// Template name (e.g. `pii_egress`). Run `clavenarctl
         /// generate-policy list` to see the available set.
         name: String,
         /// Destination file. Omit to print to stdout.
@@ -121,7 +121,7 @@ fn generate(name: &str, output: Option<PathBuf>, force: bool) -> ExitCode {
         Some((_, _, b)) => *b,
         None => {
             eprintln!(
-                "error: unknown template {:?}. Run `wardenctl generate-policy list`.",
+                "error: unknown template {:?}. Run `clavenarctl generate-policy list`.",
                 name
             );
             return ExitCode::Validation;
@@ -166,7 +166,7 @@ mod tests {
         for (name, _summary, body) in TEMPLATES {
             assert!(!body.is_empty(), "template {} is empty", name);
             assert!(
-                body.contains("package warden.authz"),
+                body.contains("package clavenar.authz"),
                 "template {} missing package declaration",
                 name
             );

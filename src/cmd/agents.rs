@@ -1,36 +1,36 @@
-//! `wardenctl agents` — full read + write access to the agents table.
+//! `clavenarctl agents` — full read + write access to the agents table.
 //!
 //! Wires the lifecycle write commands on top
 //! of the read-only foundation:
 //!
 //! ```text
-//! wardenctl agents list   --tenant <T> [--state …] [--owner-team …] [--json]
-//! wardenctl agents get    <ID> --tenant <T> [--json]
-//! wardenctl agents create --tenant <T> --name <N> --owner-team <T>
+//! clavenarctl agents list   --tenant <T> [--state …] [--owner-team …] [--json]
+//! clavenarctl agents get    <ID> --tenant <T> [--json]
+//! clavenarctl agents create --tenant <T> --name <N> --owner-team <T>
 //!                         [--scope <S>...] [--yellow-scope <S>...]
 //!                         [--attestation-kind <K>...] [--description <T>]
 //!                         [--if-absent] [--json]
-//! wardenctl agents suspend       <ID> --tenant <T> [--reason …]
-//! wardenctl agents unsuspend     <ID> --tenant <T> [--reason …]
-//! wardenctl agents decommission  <ID> --tenant <T> [--reason …]
-//! wardenctl agents envelope narrow <ID> --tenant <T> [--scope …]... [--yellow-scope …]...
-//! wardenctl agents envelope widen  <ID> --tenant <T> [--scope …]... [--yellow-scope …]...
-//! wardenctl agents transfer    <ID> --tenant <T> --to-team <T>
-//! wardenctl agents description <ID> --tenant <T> --text "…"
+//! clavenarctl agents suspend       <ID> --tenant <T> [--reason …]
+//! clavenarctl agents unsuspend     <ID> --tenant <T> [--reason …]
+//! clavenarctl agents decommission  <ID> --tenant <T> [--reason …]
+//! clavenarctl agents envelope narrow <ID> --tenant <T> [--scope …]... [--yellow-scope …]...
+//! clavenarctl agents envelope widen  <ID> --tenant <T> [--scope …]... [--yellow-scope …]...
+//! clavenarctl agents transfer    <ID> --tenant <T> --to-team <T>
+//! clavenarctl agents description <ID> --tenant <T> --text "…"
 //! ```
 //!
 //! All paths share the same auth, exit-code, and tenant-resolution
 //! plumbing: bearer comes from the cached creds at the OS-correct
-//! credentials path (Linux: `~/.config/warden/credentials.json`);
+//! credentials path (Linux: `~/.config/clavenar/credentials.json`);
 //! tenant defaults to flag → env → config; exit codes follow spec
-//! §9.3 via [`crate::ExitCode::from_warden_error`].
+//! §9.3 via [`crate::ExitCode::from_clavenar_error`].
 //!
 //! `--if-absent` on `create` is the IaC-without-Terraform pattern: a
 //! pre-fetch by `(tenant, agent_name)` decides whether to POST. On a
 //! match, exit 0; on a mismatch, exit 4 (conflict) without writing.
 
 use clap::{Args, Subcommand};
-use warden_sdk::{
+use clavenar_sdk::{
     create_request_matches, AgentListFilter, AgentRecord, AgentState, AgentsClient,
     CreateAgentRequest, EnvelopeRequest,
 };
@@ -72,7 +72,7 @@ pub(crate) enum AgentsCommand {
 
 #[derive(Debug, Args)]
 pub(crate) struct ListArgs {
-    /// Tenant to list within. Falls back to `WARDEN_TENANT` env, then
+    /// Tenant to list within. Falls back to `CLAVENAR_TENANT` env, then
     /// the config file's `default_tenant`.
     #[arg(long)]
     pub tenant: Option<String>,
@@ -218,7 +218,7 @@ pub(crate) async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitC
             return ExitCode::Validation;
         }
     };
-    let env_url = std::env::var("WARDEN_IDENTITY_URL").ok();
+    let env_url = std::env::var("CLAVENAR_IDENTITY_URL").ok();
     let url = config::resolve_identity_url(identity_url.as_deref(), env_url.as_deref(), &cfg);
 
     match args.command {
@@ -295,7 +295,7 @@ async fn list(args: ListArgs, cfg: &config::Config, url: &str) -> ExitCode {
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -320,7 +320,7 @@ async fn get(args: GetArgs, cfg: &config::Config, url: &str) -> ExitCode {
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -343,9 +343,9 @@ async fn create(args: CreateArgs, cfg: &config::Config, url: &str) -> ExitCode {
         yellow_envelope: args.yellow_scope.clone(),
         attestation_kinds: args.attestation_kind.clone(),
         description: args.description.as_deref(),
-        // `wardenctl agents create` is the hand-driven path; the
+        // `clavenarctl agents create` is the hand-driven path; the
         // operator's own OIDC sub goes on the row. The migration CLI
-        // path is `wardenctl agents migrate` (cmd/migrate.rs) — that
+        // path is `clavenarctl agents migrate` (cmd/migrate.rs) — that
         // command sets `actor_sub` to `system:migration:<sub>` so the
         // two paths leave distinguishable rows in the audit trail.
         actor_sub: None,
@@ -383,7 +383,7 @@ async fn create(args: CreateArgs, cfg: &config::Config, url: &str) -> ExitCode {
             Ok(None) => {}
             Err(e) => {
                 eprintln!("error: pre-fetch failed: {e}");
-                return ExitCode::from_warden_error(&e);
+                return ExitCode::from_clavenar_error(&e);
             }
         }
     }
@@ -405,7 +405,7 @@ async fn create(args: CreateArgs, cfg: &config::Config, url: &str) -> ExitCode {
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -451,7 +451,7 @@ async fn lifecycle(
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -489,7 +489,7 @@ async fn envelope(args: EnvelopeArgs, cfg: &config::Config, url: &str) -> ExitCo
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -517,7 +517,7 @@ async fn transfer(args: TransferArgs, cfg: &config::Config, url: &str) -> ExitCo
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -557,7 +557,7 @@ async fn description(args: DescriptionArgs, cfg: &config::Config, url: &str) -> 
         }
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }

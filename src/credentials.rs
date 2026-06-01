@@ -1,8 +1,8 @@
-//! `~/.warden/credentials.json` — cached OIDC bearer tokens.
+//! `~/.clavenar/credentials.json` — cached OIDC bearer tokens.
 //!
 //! Mirrors the `gcloud auth login` / `gh auth login` shape: one file
 //! per host, one entry per (tenant, host). Per-tenant entries because
-//! a single CLI install may target multiple Warden tenants (Acme dev,
+//! a single CLI install may target multiple Clavenar tenants (Acme dev,
 //! Acme prod) — the user only does `--tenant acme` and we look up the
 //! right token.
 //!
@@ -63,18 +63,18 @@ pub(crate) struct Credentials {
     pub tenants: BTreeMap<String, TenantCredential>,
 }
 
-/// Resolve the on-disk credentials file path. `WARDEN_CREDENTIALS_PATH`
+/// Resolve the on-disk credentials file path. `CLAVENAR_CREDENTIALS_PATH`
 /// overrides — used by the e2e runner so tests don't pollute the
-/// developer's `~/.warden/credentials.json`. When the env var is unset,
-/// fall back to `ProjectDirs` (Linux: `~/.config/warden/credentials.json`,
-/// macOS: `~/Library/Application Support/dev.agent-warden.warden/...`,
-/// Windows: `%APPDATA%/warden/...`).
+/// developer's `~/.clavenar/credentials.json`. When the env var is unset,
+/// fall back to `ProjectDirs` (Linux: `~/.config/clavenar/credentials.json`,
+/// macOS: `~/Library/Application Support/dev.agent-clavenar.clavenar/...`,
+/// Windows: `%APPDATA%/clavenar/...`).
 pub(crate) fn credentials_path() -> Result<PathBuf> {
-    if let Ok(p) = std::env::var("WARDEN_CREDENTIALS_PATH") {
+    if let Ok(p) = std::env::var("CLAVENAR_CREDENTIALS_PATH") {
         return Ok(PathBuf::from(p));
     }
-    let dirs = ProjectDirs::from("dev", "agent-warden", "warden")
-        .context("could not resolve OS config dir for warden")?;
+    let dirs = ProjectDirs::from("dev", "agent-clavenar", "clavenar")
+        .context("could not resolve OS config dir for clavenar")?;
     Ok(dirs.config_dir().join("credentials.json"))
 }
 
@@ -179,12 +179,12 @@ pub(crate) fn bearer_for(creds: &Credentials, tenant: &str) -> Result<String> {
         .tenants
         .get(tenant)
         .map(|tc| tc.id_token.clone())
-        .ok_or_else(|| anyhow!("no cached credentials for tenant '{tenant}' — run `wardenctl auth login --tenant {tenant} ...`"))
+        .ok_or_else(|| anyhow!("no cached credentials for tenant '{tenant}' — run `clavenarctl auth login --tenant {tenant} ...`"))
 }
 
 #[cfg(test)]
 mod tests {
-    // Use a base64 dep transitively via warden-sdk → don't add a direct
+    // Use a base64 dep transitively via clavenar-sdk → don't add a direct
     // dep just for tests; mint test JWTs via base64 from std::format!.
     use super::*;
     use base64::{engine::general_purpose, Engine as _};
@@ -233,10 +233,10 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("credentials.json");
-        let prev = std::env::var("WARDEN_CREDENTIALS_PATH").ok();
+        let prev = std::env::var("CLAVENAR_CREDENTIALS_PATH").ok();
         // SAFETY: the test runs in a single-threaded `#[test]` slot.
         // `set_var`/`remove_var` are safe in this scope. Restored at the end.
-        unsafe { std::env::set_var("WARDEN_CREDENTIALS_PATH", &target); }
+        unsafe { std::env::set_var("CLAVENAR_CREDENTIALS_PATH", &target); }
 
         let mut creds = Credentials::default();
         creds.tenants.insert(
@@ -257,8 +257,8 @@ mod tests {
 
         unsafe {
             match prev {
-                Some(v) => std::env::set_var("WARDEN_CREDENTIALS_PATH", v),
-                None => std::env::remove_var("WARDEN_CREDENTIALS_PATH"),
+                Some(v) => std::env::set_var("CLAVENAR_CREDENTIALS_PATH", v),
+                None => std::env::remove_var("CLAVENAR_CREDENTIALS_PATH"),
             }
         }
     }

@@ -1,4 +1,4 @@
-//! `wardenctl doctor` — probe every warden service's `/health` endpoint
+//! `clavenarctl doctor` — probe every clavenar service's `/health` endpoint
 //! and surface up/down + latency + any version info the service
 //! returns.
 //!
@@ -6,7 +6,7 @@
 //! ran `docker compose up -d` and is asking "is everything actually
 //! up?" Bare minimum: GET /health on the standard ports; surface a
 //! one-line-per-service status. Exit code 0 if every probed service
-//! responded 200, 5 if any failed — so a CI smoke can `wardenctl
+//! responded 200, 5 if any failed — so a CI smoke can `clavenarctl
 //! doctor` without further parsing.
 
 use std::time::{Duration, Instant};
@@ -71,7 +71,7 @@ struct ServiceCheck {
     /// never completed.
     latency_ms: Option<u64>,
     /// Whatever the service returned as a body, trimmed to 256 bytes.
-    /// Many warden services emit a short status string or JSON shape.
+    /// Many clavenar services emit a short status string or JSON shape.
     body_excerpt: Option<String>,
     /// One-line operator-actionable error for failures, `null` on
     /// success.
@@ -132,32 +132,32 @@ pub(crate) async fn run(args: DoctorArgs) -> ExitCode {
 
     let probes: Vec<(&'static str, String, bool)> = vec![
         {
-            let (u, ovr) = pick_url("identity", args.identity_url, "WARDEN_IDENTITY_URL");
+            let (u, ovr) = pick_url("identity", args.identity_url, "CLAVENAR_IDENTITY_URL");
             ("identity", health_url(&u), ovr)
         },
         {
-            let (u, ovr) = pick_url("ledger", args.ledger_url, "WARDEN_LEDGER_URL");
+            let (u, ovr) = pick_url("ledger", args.ledger_url, "CLAVENAR_LEDGER_URL");
             ("ledger", health_url(&u), ovr)
         },
         {
-            let (u, ovr) = pick_url("hil", args.hil_url, "WARDEN_HIL_URL");
+            let (u, ovr) = pick_url("hil", args.hil_url, "CLAVENAR_HIL_URL");
             ("hil", health_url(&u), ovr)
         },
         {
-            let (u, ovr) = pick_url("console", args.console_url, "WARDEN_CONSOLE_URL");
+            let (u, ovr) = pick_url("console", args.console_url, "CLAVENAR_CONSOLE_URL");
             ("console", health_url(&u), ovr)
         },
         {
-            let (u, ovr) = pick_url("brain", args.brain_url, "WARDEN_BRAIN_URL");
+            let (u, ovr) = pick_url("brain", args.brain_url, "CLAVENAR_BRAIN_URL");
             ("brain", health_url(&u), ovr)
         },
         {
             let (u, ovr) =
-                pick_url("policy-engine", args.policy_engine_url, "WARDEN_POLICY_URL");
+                pick_url("policy-engine", args.policy_engine_url, "CLAVENAR_POLICY_URL");
             ("policy-engine", health_url(&u), ovr)
         },
         {
-            let (u, ovr) = pick_url("proxy", args.proxy_url, "WARDEN_PROXY_URL");
+            let (u, ovr) = pick_url("proxy", args.proxy_url, "CLAVENAR_PROXY_URL");
             ("proxy", health_url(&u), ovr)
         },
     ];
@@ -190,7 +190,7 @@ pub(crate) async fn run(args: DoctorArgs) -> ExitCode {
                 latency_ms: None,
                 body_excerpt: None,
                 error: Some(
-                    "proxy probe is opt-in (mTLS) — pass --proxy-url or set WARDEN_PROXY_URL"
+                    "proxy probe is opt-in (mTLS) — pass --proxy-url or set CLAVENAR_PROXY_URL"
                         .to_string(),
                 ),
             });
@@ -333,7 +333,7 @@ mod tests {
         // SAFETY: this test sets/removes a process-wide env var; the
         // CARGO_TARGET_TMPDIR-style isolation isn't available, so we
         // unset on teardown.
-        let key = "WARDEN_DOCTOR_TEST_URL";
+        let key = "CLAVENAR_DOCTOR_TEST_URL";
         unsafe { std::env::set_var(key, "http://from-env") };
         let (u, ovr) = pick_url("identity", Some("http://from-flag".into()), key);
         assert_eq!(u, "http://from-flag");
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn pick_url_falls_through_to_default() {
-        let key = "WARDEN_DOCTOR_TEST_UNSET";
+        let key = "CLAVENAR_DOCTOR_TEST_UNSET";
         unsafe { std::env::remove_var(key) };
         let (u, ovr) = pick_url("identity", None, key);
         assert!(u.contains("localhost:8086"), "got {}", u);

@@ -1,4 +1,4 @@
-# Claude Code → Agent Warden
+# Claude Code → Clavenar
 
 [Claude Code](https://claude.com/claude-code) registers MCP servers
 via `~/.claude.json` or per-project `.mcp.json`, both readable via
@@ -6,20 +6,20 @@ via `~/.claude.json` or per-project `.mcp.json`, both readable via
 
 ## Config
 
-Add a `warden` MCP server (project-scoped — drop into
+Add a `clavenar` MCP server (project-scoped — drop into
 `<project>/.mcp.json`):
 
 ```json
 {
   "mcpServers": {
-    "warden": {
-      "command": "/usr/local/bin/wardenctl",
+    "clavenar": {
+      "command": "/usr/local/bin/clavenarctl",
       "args": [
         "mcp-bridge",
         "--url",   "https://localhost:19443",
-        "--cert",  "/home/you/warden/certs-dev/client.crt",
-        "--key",   "/home/you/warden/certs-dev/client.key",
-        "--ca",    "/home/you/warden/certs-dev/ca.crt",
+        "--cert",  "/home/you/clavenar/certs-dev/client.crt",
+        "--key",   "/home/you/clavenar/certs-dev/client.key",
+        "--ca",    "/home/you/clavenar/certs-dev/ca.crt",
         "--client-hint", "claude-code"
       ]
     }
@@ -30,12 +30,12 @@ Add a `warden` MCP server (project-scoped — drop into
 Or use the CLI helper:
 
 ```bash
-claude mcp add warden /usr/local/bin/wardenctl -- \
+claude mcp add clavenar /usr/local/bin/clavenarctl -- \
   mcp-bridge \
   --url   https://localhost:19443 \
-  --cert  /home/you/warden/certs-dev/client.crt \
-  --key   /home/you/warden/certs-dev/client.key \
-  --ca    /home/you/warden/certs-dev/ca.crt \
+  --cert  /home/you/clavenar/certs-dev/client.crt \
+  --key   /home/you/clavenar/certs-dev/client.key \
+  --ca    /home/you/clavenar/certs-dev/ca.crt \
   --client-hint claude-code
 ```
 
@@ -47,15 +47,15 @@ claude mcp add warden /usr/local/bin/wardenctl -- \
 ## Verify
 
 ```bash
-claude mcp list     # warden should appear in the active list
+claude mcp list     # clavenar should appear in the active list
 ```
 
 Then in a Claude Code session, hit any tool that talks to the
-`warden` server (e.g. `list_resources`). The proxy log shows the
+`clavenar` server (e.g. `list_resources`). The proxy log shows the
 inbound call:
 
 ```text
-INFO warden_proxy::mtls: agent_id=agent-001 method=list_resources
+INFO clavenar_proxy::mtls: agent_id=agent-001 method=list_resources
 ```
 
 and the ledger captures a row at `/audit/agent-001`.
@@ -64,7 +64,7 @@ and the ledger captures a row at `/audit/agent-001`.
 
 - **protocolVersion negotiation.** Claude Code 2.1.x sends
   `"protocolVersion": "2025-11-25"`. The bridge passes this through;
-  the upstream `warden-init-stub` echoes it back verbatim. Older
+  the upstream `clavenar-init-stub` echoes it back verbatim. Older
   Claude Code (≤2.0.x) sends `"2024-11-05"` — same flow, no
   divergence required.
 - **Notifications.** Claude Code emits `notifications/initialized`
@@ -76,6 +76,6 @@ and the ledger captures a row at `/audit/agent-001`.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `Failed to connect` in Claude Code's MCP panel | Bridge can't reach the proxy URL | `curl -k https://localhost:19443/health` from the same shell that runs Claude Code; check `--url` host:port. |
-| `error: warden proxy 401` | mTLS cert rejected at proxy ingress | Confirm `--cert`/`--key`/`--ca` paths; CA must be the one that signed the proxy's `server.crt`. |
-| `error: warden proxy 403 — No credentials found for agent ...` | Vault is missing the agent_id entry | See [README.md — Shared prerequisites](README.md#shared-prerequisites). |
-| Tool returns immediately with no output | Bridge stdout flush stuck (rare; pre-v0.21 issue) | Upgrade wardenctl. |
+| `error: clavenar proxy 401` | mTLS cert rejected at proxy ingress | Confirm `--cert`/`--key`/`--ca` paths; CA must be the one that signed the proxy's `server.crt`. |
+| `error: clavenar proxy 403 — No credentials found for agent ...` | Vault is missing the agent_id entry | See [README.md — Shared prerequisites](README.md#shared-prerequisites). |
+| Tool returns immediately with no output | Bridge stdout flush stuck (rare; pre-v0.21 issue) | Upgrade clavenarctl. |

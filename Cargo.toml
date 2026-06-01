@@ -1,22 +1,22 @@
 [package]
-# Crate name matches the warden-* repo family convention
-# (warden-sdk, warden-hil, warden-proxy, …). The binary itself stays
-# `wardenctl` — single-word, like `kubectl` shipped from the
-# `kubernetes` repo — so the operator UX in warden-specs/TECH_SPEC.md#agent-onboarding-wao §9 reads
+# Crate name matches the clavenar-* repo family convention
+# (clavenar-sdk, clavenar-hil, clavenar-proxy, …). The binary itself stays
+# `clavenarctl` — single-word, like `kubectl` shipped from the
+# `kubernetes` repo — so the operator UX in clavenar-specs/TECH_SPEC.md#agent-onboarding-wao §9 reads
 # verbatim as the command line.
-name = "warden-ctl"
+name = "clavenar-ctl"
 version = "0.1.0"
 edition = "2024"
-description = "Operator CLI for Agent Warden — register agents, drive lifecycle, and verify the chain."
+description = "Operator CLI for Clavenar — register agents, drive lifecycle, and verify the chain."
 license = "Apache-2.0"
 
 [[bin]]
-name = "wardenctl"
+name = "clavenarctl"
 path = "src/main.rs"
 
 [dependencies]
-# Path-dep on warden-sdk (sibling repo, not a Cargo workspace).
-warden-sdk = { path = "../warden-sdk" }
+# Path-dep on clavenar-sdk (sibling repo, not a Cargo workspace).
+clavenar-sdk = { path = "../clavenar-sdk" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-std", "io-util"] }
 serde = { version = "1", features = ["derive"] }
@@ -26,8 +26,8 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 anyhow = "1"
 thiserror = "1"
 url = "2.5"
-# OS-correct config + cred dir resolution. `~/.warden/...` on Unix,
-# `%APPDATA%\warden\...` on Windows — the latter free-of-charge.
+# OS-correct config + cred dir resolution. `~/.clavenar/...` on Unix,
+# `%APPDATA%\clavenar\...` on Windows — the latter free-of-charge.
 directories = "5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -35,7 +35,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # `whoami` display — server is the authoritative verifier; this is
 # best-effort decode only.
 base64 = "0.22"
-# Doctor probes `/health` on every warden service over HTTP/HTTPS;
+# Doctor probes `/health` on every clavenar service over HTTP/HTTPS;
 # rustls keeps the build static and avoids the system OpenSSL dep.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 # Init scaffolds files; doctor + policy emit them. Tempfile is used
@@ -43,7 +43,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 tempfile = "3"
 
 [dev-dependencies]
-# `assert_cmd` lets the integration tests spawn `cargo run --bin wardenctl`
+# `assert_cmd` lets the integration tests spawn `cargo run --bin clavenarctl`
 # and assert exit codes / stdout shape, matching the CLI contract from
 # spec §9.3.
 assert_cmd = "2"

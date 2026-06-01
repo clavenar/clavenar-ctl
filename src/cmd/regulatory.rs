@@ -1,11 +1,11 @@
-//! `wardenctl regulatory export` — operator-side regulatory bundle
+//! `clavenarctl regulatory export` — operator-side regulatory bundle
 //! export.
 //!
 //! Wraps the SDK's `LedgerClient::regulatory_export` with file IO + a
 //! human-friendly progress story:
 //!
 //! ```text
-//! wardenctl regulatory export
+//! clavenarctl regulatory export
 //!     --from <RFC3339> --to <RFC3339>
 //!     [--readme path/to/file.md]
 //!     [--include-exports]
@@ -13,13 +13,13 @@
 //!     --output bundle.tar.gz
 //! ```
 //!
-//! Exit codes follow spec §9.3 via [`crate::ExitCode::from_warden_error`].
+//! Exit codes follow spec §9.3 via [`crate::ExitCode::from_clavenar_error`].
 //! Local file IO failures (readme read, output write) collapse to
 //! `Validation` (path / permission) or `Server` (e.g. disk full).
 //!
 //! ## Why a separate top-level verb (`regulatory`)?
 //!
-//! Bundling under `wardenctl agents` would conflate "operate on the
+//! Bundling under `clavenarctl agents` would conflate "operate on the
 //! agent registry" with "produce an EU-AI-Act artefact." Different
 //! audiences (compliance officer vs. agent-platform owner), different
 //! auth (this surface doesn't talk to identity at all today — the
@@ -32,7 +32,7 @@ use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use clap::{Args, Subcommand};
-use warden_sdk::{LedgerClient, RegulatoryExportOptions};
+use clavenar_sdk::{LedgerClient, RegulatoryExportOptions};
 
 use crate::ExitCode;
 
@@ -73,7 +73,7 @@ pub(crate) struct ExportArgs {
     pub include_exports: bool,
 
     /// Override the ledger base URL. Falls back to
-    /// `WARDEN_LEDGER_URL` env, then `http://localhost:8083`.
+    /// `CLAVENAR_LEDGER_URL` env, then `http://localhost:8083`.
     /// Distinct from `--identity-url` (the latter targets the
     /// identity service, which this command does not call).
     #[arg(long)]
@@ -128,7 +128,7 @@ async fn export(args: ExportArgs) -> ExitCode {
 
     let ledger_url = args
         .ledger_url
-        .or_else(|| std::env::var("WARDEN_LEDGER_URL").ok())
+        .or_else(|| std::env::var("CLAVENAR_LEDGER_URL").ok())
         .unwrap_or_else(|| "http://localhost:8083".to_string());
 
     let client = match LedgerClient::new(&ledger_url) {
@@ -149,16 +149,16 @@ async fn export(args: ExportArgs) -> ExitCode {
             // Surface the body for 4xx — the ledger's error messages
             // are operator-actionable ("readme too big",
             // "from must be < to").
-            if let warden_sdk::WardenError::Server { status, body } = &e {
+            if let clavenar_sdk::ClavenarError::Server { status, body } = &e {
                 eprintln!("error: ledger {status}: {body}");
             } else {
                 eprintln!("error: regulatory export: {e}");
             }
-            return ExitCode::from_warden_error(&e);
+            return ExitCode::from_clavenar_error(&e);
         }
     };
 
-    // Stdout sentinel — useful for `wardenctl … --output - | tar -tz`
+    // Stdout sentinel — useful for `clavenarctl … --output - | tar -tz`
     // type pipelines without leaving a file on disk. Otherwise write
     // to the named path.
     if args.output.as_os_str() == "-" {
@@ -208,7 +208,7 @@ mod tests {
         // The shape we promise in the spec: --from, --to, --output
         // are mandatory; readme + include-exports are optional.
         let cli = CliFixture::try_parse_from([
-            "wardenctl",
+            "clavenarctl",
             "regulatory",
             "export",
             "--from",
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn parses_full_export_invocation_with_readme_and_pointers() {
         let cli = CliFixture::try_parse_from([
-            "wardenctl",
+            "clavenarctl",
             "regulatory",
             "export",
             "--from",
@@ -269,7 +269,7 @@ mod tests {
     fn rejects_missing_required_args() {
         // --output is required.
         let err = CliFixture::try_parse_from([
-            "wardenctl",
+            "clavenarctl",
             "regulatory",
             "export",
             "--from",

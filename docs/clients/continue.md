@@ -1,4 +1,4 @@
-# Continue.dev → Agent Warden
+# Continue.dev → Clavenar
 
 [Continue](https://continue.dev) is an open-source AI-coding assistant
 shipping as a VS Code and JetBrains extension. It reads MCP server
@@ -14,16 +14,16 @@ config from `~/.continue/config.json` under the
 {
   "mcpServers": [
     {
-      "name": "warden",
+      "name": "clavenar",
       "transport": {
         "type": "stdio",
-        "command": "wardenctl",
+        "command": "clavenarctl",
         "args": [
           "mcp-bridge",
           "--url",   "https://localhost:19443",
-          "--cert",  "/Users/you/warden/certs-dev/client.crt",
-          "--key",   "/Users/you/warden/certs-dev/client.key",
-          "--ca",    "/Users/you/warden/certs-dev/ca.crt",
+          "--cert",  "/Users/you/clavenar/certs-dev/client.crt",
+          "--key",   "/Users/you/clavenar/certs-dev/client.key",
+          "--ca",    "/Users/you/clavenar/certs-dev/ca.crt",
           "--client-hint", "continue"
         ]
       }
@@ -44,7 +44,7 @@ location across macOS / Linux / Windows (`%USERPROFILE%\.continue\`).
 ## Verify
 
 After save, Continue auto-loads new MCP servers on next chat turn.
-In the chat panel, type "what tools do you see from the warden
+In the chat panel, type "what tools do you see from the clavenar
 server?" Continue calls `tools/list` and renders the response.
 
 ## Known quirks
@@ -56,7 +56,7 @@ server?" Continue calls `tools/list` and renders the response.
 - **Transport `type` required.** Unlike Claude Code's flat shape,
   Continue requires the explicit `"type": "stdio"` discriminator —
   http and websocket transports are also schema-valid but not
-  supported against Warden.
+  supported against Clavenar.
 - **JetBrains plugin.** Same config file; JetBrains reads from the
   same path. No JetBrains-specific tweaks required.
 
@@ -66,4 +66,4 @@ server?" Continue calls `tools/list` and renders the response.
 |---|---|
 | Continue ignores the entry | Wrong schema key — confirm `mcpServers` (array) for v0.10+, or `experimental.modelContextProtocolServers` for older. |
 | `Failed to start MCP server` | `command` not on PATH for the IDE process — use an absolute path. |
-| `tools/list` returns empty | Upstream MCP server itself is empty; verify against `wardenctl mcp-bridge` over a manual stdio session before blaming Continue. |
+| `tools/list` returns empty | Upstream MCP server itself is empty; verify against `clavenarctl mcp-bridge` over a manual stdio session before blaming Continue. |

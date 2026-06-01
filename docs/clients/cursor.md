@@ -1,4 +1,4 @@
-# Cursor → Agent Warden
+# Cursor → Clavenar
 
 [Cursor](https://cursor.com) registers MCP servers in
 `~/.cursor/mcp.json` (global) or `<workspace>/.cursor/mcp.json`
@@ -11,14 +11,14 @@
 ```json
 {
   "mcpServers": {
-    "warden": {
-      "command": "/usr/local/bin/wardenctl",
+    "clavenar": {
+      "command": "/usr/local/bin/clavenarctl",
       "args": [
         "mcp-bridge",
         "--url",   "https://localhost:19443",
-        "--cert",  "/Users/you/warden/certs-dev/client.crt",
-        "--key",   "/Users/you/warden/certs-dev/client.key",
-        "--ca",    "/Users/you/warden/certs-dev/ca.crt",
+        "--cert",  "/Users/you/clavenar/certs-dev/client.crt",
+        "--key",   "/Users/you/clavenar/certs-dev/client.key",
+        "--ca",    "/Users/you/clavenar/certs-dev/ca.crt",
         "--client-hint", "cursor"
       ]
     }
@@ -40,7 +40,7 @@ that workspace.
 
 ## Verify
 
-Open Cursor → Settings → MCP. The `warden` server should show as
+Open Cursor → Settings → MCP. The `clavenar` server should show as
 "connected" with a green dot. Fire any tool from chat; the proxy
 log lights up with the request, and the ledger captures a row
 keyed on the cert's agent_id.
@@ -52,13 +52,13 @@ keyed on the cert's agent_id.
   — `tools/list` is a regular JSON-RPC call through the proxy.
 - **Stale process on config change.** Cursor sometimes leaves the old
   bridge process running after a config edit. If a connection refuses
-  to refresh, `pkill -f 'wardenctl mcp-bridge'` and re-open the MCP
+  to refresh, `pkill -f 'clavenarctl mcp-bridge'` and re-open the MCP
   panel.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| Red dot on MCP panel + log shows "spawn failed" | `command` path is wrong or `wardenctl` is not executable. `chmod +x /usr/local/bin/wardenctl`. |
+| Red dot on MCP panel + log shows "spawn failed" | `command` path is wrong or `clavenarctl` is not executable. `chmod +x /usr/local/bin/clavenarctl`. |
 | Tool list empty | `tools/list` upstream call failed — check proxy + brain are running, and the agent has Vault creds. |
-| `warden proxy 403` on every call | Same as Claude Code — Vault entry missing for the agent_id. |
+| `clavenar proxy 403` on every call | Same as Claude Code — Vault entry missing for the agent_id. |

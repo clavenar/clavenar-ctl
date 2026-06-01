@@ -1,5 +1,5 @@
-//! `wardenctl mcp-bridge` — stdio MCP shim that brokers a real MCP
-//! client (e.g. Claude Code) into the warden-proxy's mTLS HTTP `/mcp`
+//! `clavenarctl mcp-bridge` — stdio MCP shim that brokers a real MCP
+//! client (e.g. Claude Code) into the clavenar-proxy's mTLS HTTP `/mcp`
 //! surface.
 //!
 //! Claude Code's `mcp add` registers stdio binaries; the proxy
@@ -10,7 +10,7 @@
 //! `notifications/*`) are fire-and-forget — posted upstream, no
 //! response written.
 //!
-//! Scope: real-agent smoke (warden-e2e/MANUAL_TESTS.md `S-MCP-01`).
+//! Scope: real-agent smoke (clavenar-e2e/MANUAL_TESTS.md `S-MCP-01`).
 //! Not a production agent runtime — no SVID renewal, no session
 //! resumption, no streaming. Promote to its own repo when those
 //! become real requirements.
@@ -40,7 +40,7 @@ pub(crate) struct McpBridgeArgs {
     #[arg(long)]
     pub key: PathBuf,
     /// PEM CA bundle the proxy's server cert chains to. Dev:
-    /// `warden-proxy/certs-dev/ca.crt`.
+    /// `clavenar-proxy/certs-dev/ca.crt`.
     #[arg(long)]
     pub ca: PathBuf,
     /// Per-request timeout in seconds. Defaults to 30s — covers the
@@ -49,7 +49,7 @@ pub(crate) struct McpBridgeArgs {
     #[arg(long, default_value_t = 30)]
     pub timeout_secs: u64,
     /// Skip server certificate validation. Only sensible against the
-    /// dev stack — `warden-proxy/scripts/gen_certs.sh` mints a
+    /// dev stack — `clavenar-proxy/scripts/gen_certs.sh` mints a
     /// `server.crt` with `CN=localhost` and no SAN, which rustls
     /// rejects per RFC 6125. Prod issues SVID-shaped certs with
     /// proper SANs; do not pass this flag there.
@@ -59,7 +59,7 @@ pub(crate) struct McpBridgeArgs {
     /// JSON-RPC frames verbatim and works for every supported client;
     /// the hint is logged to stderr for diagnostics and reserves the
     /// flag for future per-client quirks (see
-    /// `warden-ctl/docs/clients/`). Unknown values are rejected at
+    /// `clavenar-ctl/docs/clients/`). Unknown values are rejected at
     /// arg-parse time.
     #[arg(long, value_enum)]
     pub client_hint: Option<ClientHint>,
@@ -94,7 +94,7 @@ impl ClientHint {
 pub(crate) async fn run(args: McpBridgeArgs) -> ExitCode {
     if let Some(hint) = args.client_hint {
         // Logged so an operator inspecting bridge stderr (or a tee'd
-        // wrapper script — see warden-ctl/docs/clients/) can confirm
+        // wrapper script — see clavenar-ctl/docs/clients/) can confirm
         // the client recipe was applied. No behavioral divergence
         // today; the variant exists so per-hint quirks can land
         // without re-plumbing the CLI surface.
@@ -184,7 +184,7 @@ pub(crate) async fn run(args: McpBridgeArgs) -> ExitCode {
                     "id": id,
                     "error": {
                         "code": -32000,
-                        "message": format!("warden proxy {status}"),
+                        "message": format!("clavenar proxy {status}"),
                         "data": raw,
                     },
                 });
