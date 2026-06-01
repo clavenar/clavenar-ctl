@@ -1,12 +1,12 @@
-//! `wardenctl` — operator CLI for Agent Warden (warden-specs/TECH_SPEC.md#agent-onboarding-wao §9).
+//! `clavenarctl` — operator CLI for Clavenar (clavenar-specs/TECH_SPEC.md#agent-onboarding-wao §9).
 //!
-//! Sibling crate to `warden-sdk`; the SDK is the typed library
-//! (consumed by `warden-console` and integrators), this binary is the
+//! Sibling crate to `clavenar-sdk`; the SDK is the typed library
+//! (consumed by `clavenar-console` and integrators), this binary is the
 //! human-facing CLI. Single artifact, single source of truth: every
-//! `wardenctl` subcommand calls into a `warden-sdk` client.
+//! `clavenarctl` subcommand calls into a `clavenar-sdk` client.
 //!
 //! Top-level surface — see `README.md` for the full subcommand listing
-//! and `wardenctl <verb> --help` for flag-level docs. The three verbs
+//! and `clavenarctl <verb> --help` for flag-level docs. The three verbs
 //! today are `auth`, `agents`, and `regulatory`.
 //!
 //! Device-authorization-grant flow (RFC 8628) is *not* yet shipped — it
@@ -31,12 +31,12 @@ mod credentials;
 
 use clap::{Parser, Subcommand};
 
-/// `wardenctl` — operator CLI for Agent Warden.
+/// `clavenarctl` — operator CLI for Clavenar.
 #[derive(Debug, Parser)]
-#[command(name = "wardenctl", version, about)]
+#[command(name = "clavenarctl", version, about)]
 struct Cli {
     /// Override the default identity service base URL. Falls back to
-    /// `WARDEN_IDENTITY_URL` and then `~/.warden/config.toml`'s
+    /// `CLAVENAR_IDENTITY_URL` and then `~/.clavenar/config.toml`'s
     /// `identity_url`. Useful when shipping a binary against a non-prod
     /// identity instance without rewriting the config file.
     #[arg(long, global = true)]
@@ -52,21 +52,21 @@ enum Command {
     /// policies. Idempotent — refuses to clobber an existing config
     /// without `--force`.
     Init(cmd::init::InitArgs),
-    /// Probe `/health` on every warden service URL and report up /
+    /// Probe `/health` on every clavenar service URL and report up /
     /// down / latency. Exit 0 if every probed service is up,
     /// 5 otherwise — wire-format-friendly for CI smoke tests.
     Doctor(cmd::doctor::DoctorArgs),
-    /// Emit Rego policy templates from the warden-policy-engine
+    /// Emit Rego policy templates from the clavenar-policy-engine
     /// starter pack. `list` shows what's available; `generate <name>`
     /// writes one to stdout or `--output FILE`.
     GeneratePolicy(cmd::policy::PolicyArgs),
     /// Policy Lab: replay a draft Rego rule against the last N days
     /// of real ledger traffic + the chaos catalog before publishing.
-    /// `wardenctl policy test <file.rego>` is the CI-friendly form;
+    /// `clavenarctl policy test <file.rego>` is the CI-friendly form;
     /// pass `--fail-on-regression` to exit non-zero on catalog
     /// regressions.
     Policy(cmd::policy_lab::PolicyArgs),
-    /// Authenticate against `warden-identity`, manage cached creds.
+    /// Authenticate against `clavenar-identity`, manage cached creds.
     Auth(cmd::auth::AuthArgs),
     /// Read-only access to the registered agents table. Writes
     /// land later.
@@ -75,9 +75,9 @@ enum Command {
     /// from the ledger over a time window.
     Regulatory(cmd::regulatory::RegulatoryArgs),
     /// Stdio MCP shim — registers as an MCP server with a real client
-    /// (e.g. `claude mcp add`) and brokers traffic through the warden
+    /// (e.g. `claude mcp add`) and brokers traffic through the clavenar
     /// proxy's mTLS `/mcp` surface. Intended for the real-agent smoke
-    /// flow documented in `warden-e2e/MANUAL_TESTS.md` (`S-MCP-01`),
+    /// flow documented in `clavenar-e2e/MANUAL_TESTS.md` (`S-MCP-01`),
     /// not a long-lived production agent runtime.
     McpBridge(cmd::mcp_bridge::McpBridgeArgs),
 }
@@ -88,7 +88,7 @@ async fn main() {
         .with_writer(std::io::stderr)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("wardenctl=info")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("clavenarctl=info")),
         )
         .init();
 
@@ -139,12 +139,12 @@ impl ExitCode {
         }
     }
 
-    /// Map a [`warden_sdk::WardenError`] onto the right exit code.
+    /// Map a [`clavenar_sdk::ClavenarError`] onto the right exit code.
     /// Centralizes the mapping so subcommands don't duplicate the
     /// status-classification logic. The 4xx fan-out matches the spec's
     /// auth/conflict/validation split.
-    pub fn from_warden_error(err: &warden_sdk::WardenError) -> Self {
-        use warden_sdk::WardenError as E;
+    pub fn from_clavenar_error(err: &clavenar_sdk::ClavenarError) -> Self {
+        use clavenar_sdk::ClavenarError as E;
         match err {
             E::Unauthorized(_) => ExitCode::Auth,
             E::BadRequest(_) => ExitCode::Validation,
@@ -159,7 +159,7 @@ impl ExitCode {
                 _ => ExitCode::Server,
             },
             E::Transport(_) | E::Decode(_) => ExitCode::Server,
-            // `WardenError` is `#[non_exhaustive]` — future variants
+            // `ClavenarError` is `#[non_exhaustive]` — future variants
             // collapse to Server until we explicitly classify them. A
             // panic-on-unknown would be wrong on a CLI exit path.
             _ => ExitCode::Server,
@@ -172,27 +172,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exit_code_classifies_warden_error() {
+    fn exit_code_classifies_clavenar_error() {
         // Single source of truth for the spec §9.3 mapping.
-        let unauth = warden_sdk::WardenError::Unauthorized("bad token".into());
-        assert_eq!(ExitCode::from_warden_error(&unauth), ExitCode::Auth);
+        let unauth = clavenar_sdk::ClavenarError::Unauthorized("bad token".into());
+        assert_eq!(ExitCode::from_clavenar_error(&unauth), ExitCode::Auth);
 
-        let bad = warden_sdk::WardenError::BadRequest("malformed body".into());
-        assert_eq!(ExitCode::from_warden_error(&bad), ExitCode::Validation);
+        let bad = clavenar_sdk::ClavenarError::BadRequest("malformed body".into());
+        assert_eq!(ExitCode::from_clavenar_error(&bad), ExitCode::Validation);
 
-        let conflict = warden_sdk::WardenError::Server {
+        let conflict = clavenar_sdk::ClavenarError::Server {
             status: reqwest::StatusCode::CONFLICT,
             body: "agent_name_taken".into(),
         };
-        assert_eq!(ExitCode::from_warden_error(&conflict), ExitCode::Conflict);
+        assert_eq!(ExitCode::from_clavenar_error(&conflict), ExitCode::Conflict);
 
-        let server = warden_sdk::WardenError::Server {
+        let server = clavenar_sdk::ClavenarError::Server {
             status: reqwest::StatusCode::SERVICE_UNAVAILABLE,
             body: "infra down".into(),
         };
-        assert_eq!(ExitCode::from_warden_error(&server), ExitCode::Server);
+        assert_eq!(ExitCode::from_clavenar_error(&server), ExitCode::Server);
 
-        let cfg = warden_sdk::WardenError::InvalidConfig("bad url".into());
-        assert_eq!(ExitCode::from_warden_error(&cfg), ExitCode::Validation);
+        let cfg = clavenar_sdk::ClavenarError::InvalidConfig("bad url".into());
+        assert_eq!(ExitCode::from_clavenar_error(&cfg), ExitCode::Validation);
     }
 }

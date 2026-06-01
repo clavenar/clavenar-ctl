@@ -1,10 +1,10 @@
 //! `config.toml` — operator-level CLI defaults.
 //!
 //! Optional file at the OS-correct config dir (`directories` crate
-//! resolves it: `~/.config/warden/config.toml` on Linux,
-//! `~/Library/Application Support/dev.agent-warden.warden/config.toml`
-//! on macOS, `%APPDATA%\agent-warden\warden\config\config.toml` on
-//! Windows). Carries a default identity URL and tenant so `wardenctl
+//! resolves it: `~/.config/clavenar/config.toml` on Linux,
+//! `~/Library/Application Support/dev.agent-clavenar.clavenar/config.toml`
+//! on macOS, `%APPDATA%\agent-clavenar\clavenar\config\config.toml` on
+//! Windows). Carries a default identity URL and tenant so `clavenarctl
 //! agents list` doesn't need to repeat them on every call. Per-call
 //! CLI flags and env vars override the file.
 //!
@@ -16,7 +16,7 @@
 //! priority first):
 //!
 //! 1. Per-call `--identity-url` / `--tenant` flag.
-//! 2. `WARDEN_IDENTITY_URL` / `WARDEN_TENANT` env var.
+//! 2. `CLAVENAR_IDENTITY_URL` / `CLAVENAR_TENANT` env var.
 //! 3. `config.toml`.
 //! 4. Built-in default (`identity_url` only — `http://localhost:8086`).
 //! 5. Boot failure (no `default_tenant` and none on the call site).
@@ -42,8 +42,8 @@ pub(crate) struct Config {
 /// Resolve the on-disk config-file path. Idempotent — does NOT touch
 /// the filesystem (creation is the caller's job, on save).
 pub(crate) fn config_path() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("dev", "agent-warden", "warden")
-        .context("could not resolve OS config dir for warden")?;
+    let dirs = ProjectDirs::from("dev", "agent-clavenar", "clavenar")
+        .context("could not resolve OS config dir for clavenar")?;
     Ok(dirs.config_dir().join("config.toml"))
 }
 
@@ -64,7 +64,7 @@ pub(crate) fn load() -> Result<Config> {
 
 /// Resolve the identity URL using the spec'd precedence chain.
 /// `cli_override` is the per-call `--identity-url` flag; `env_override`
-/// is the captured `WARDEN_IDENTITY_URL` value.
+/// is the captured `CLAVENAR_IDENTITY_URL` value.
 pub(crate) fn resolve_identity_url(
     cli_override: Option<&str>,
     env_override: Option<&str>,
@@ -82,11 +82,11 @@ pub(crate) fn resolve_identity_url(
 /// after emitting the operator-actionable error message — keeps the
 /// "where's tenant supposed to come from?" hint in one place.
 pub(crate) fn resolve_tenant(arg: Option<String>, cfg: &Config) -> Result<String, ExitCode> {
-    arg.or_else(|| std::env::var("WARDEN_TENANT").ok())
+    arg.or_else(|| std::env::var("CLAVENAR_TENANT").ok())
         .or_else(|| cfg.default_tenant.clone())
         .ok_or_else(|| {
             eprintln!(
-                "error: --tenant required (or set WARDEN_TENANT or default_tenant in config.toml)"
+                "error: --tenant required (or set CLAVENAR_TENANT or default_tenant in config.toml)"
             );
             ExitCode::Validation
         })
@@ -149,15 +149,15 @@ mod tests {
             identity_url: None,
             default_tenant: Some("acme".into()),
         };
-        let prev = std::env::var("WARDEN_TENANT").ok();
+        let prev = std::env::var("CLAVENAR_TENANT").ok();
         unsafe {
-            std::env::remove_var("WARDEN_TENANT");
+            std::env::remove_var("CLAVENAR_TENANT");
         }
         let resolved = resolve_tenant(None, &cfg).unwrap();
         assert_eq!(resolved, "acme");
         unsafe {
             if let Some(v) = prev {
-                std::env::set_var("WARDEN_TENANT", v);
+                std::env::set_var("CLAVENAR_TENANT", v);
             }
         }
     }

@@ -1,15 +1,15 @@
-# warden-ctl
+# clavenar-ctl
 
-Operator CLI for [Agent Warden](https://github.com/vanteguardlabs).
-Single artifact built on top of [`warden-sdk`](https://github.com/vanteguardlabs/warden-sdk):
-the SDK is the typed Rust library (also consumed by `warden-console` and
+Operator CLI for [Clavenar](https://github.com/clavenar).
+Single artifact built on top of [`clavenar-sdk`](https://github.com/clavenar/clavenar-sdk):
+the SDK is the typed Rust library (also consumed by `clavenar-console` and
 external integrators), this binary is the human-facing CLI.
 
-Naming follows the kubectl pattern: the **crate / repo** is `warden-ctl`
-(matches the `warden-*` family — `warden-identity`, `warden-sdk`,
-`warden-hil`, …); the **binary** is `wardenctl` (single word,
-typed-on-the-command-line every day). After `cargo install warden-ctl`
-you run `wardenctl ...`.
+Naming follows the kubectl pattern: the **crate / repo** is `clavenar-ctl`
+(matches the `clavenar-*` family — `clavenar-identity`, `clavenar-sdk`,
+`clavenar-hil`, …); the **binary** is `clavenarctl` (single word,
+typed-on-the-command-line every day). After `cargo install clavenar-ctl`
+you run `clavenarctl ...`.
 
 Sequence diagrams for the five primary subcommands — `auth login`,
 `agents <lifecycle-verb>`, `agents create --if-absent`,
@@ -20,19 +20,19 @@ Sequence diagrams for the five primary subcommands — `auth login`,
 
 Onboarding read + write surfaces all shipped. The full RFC
 8628 device-authorization-grant flow remains the open item — it lands
-once the dex mock IdP is wired in `warden-e2e`; until then, supply the
+once the dex mock IdP is wired in `clavenar-e2e`; until then, supply the
 `id_token` via `--token-file` or `--token-stdin`.
 
 First-run surface (scaffold + probe + Rego templates):
 
 ```sh
-wardenctl init                          # scaffold ~/.config/warden/config.toml
-wardenctl init --with-policies          # also drop the 7 templates into ./policies/templates/
-wardenctl doctor                        # probe /health on every warden service URL
-wardenctl doctor --json                 # JSON output for CI smoke
-wardenctl generate-policy list          # browse the starter pack
-wardenctl generate-policy pii_egress    # emit a template to stdout
-wardenctl generate-policy pii_egress --output policies/pii_egress.rego
+clavenarctl init                          # scaffold ~/.config/clavenar/config.toml
+clavenarctl init --with-policies          # also drop the 7 templates into ./policies/templates/
+clavenarctl doctor                        # probe /health on every clavenar service URL
+clavenarctl doctor --json                 # JSON output for CI smoke
+clavenarctl generate-policy list          # browse the starter pack
+clavenarctl generate-policy pii_egress    # emit a template to stdout
+clavenarctl generate-policy pii_egress --output policies/pii_egress.rego
 ```
 
 `doctor` reports up/down/latency for identity, ledger, hil, console,
@@ -42,39 +42,39 @@ when every probed service is up, 5 otherwise — safe to wire into
 `docker compose` healthcheck loops or CI smoke scripts.
 
 `generate-policy` templates are embedded in the binary at build time
-from `warden-policy-engine/policies/templates/` — no FS dependency
+from `clavenar-policy-engine/policies/templates/` — no FS dependency
 at runtime.
 
 Read surface:
 
 ```sh
-wardenctl auth login   --tenant <T> --token-file <PATH>
-wardenctl auth login   --tenant <T> --token-stdin
-wardenctl auth logout  --tenant <T>
-wardenctl auth whoami  --tenant <T> [--json]
-wardenctl agents list  --tenant <T> [--state ...] [--owner-team ...] [--json]
-wardenctl agents get   <ID> --tenant <T> [--json]
+clavenarctl auth login   --tenant <T> --token-file <PATH>
+clavenarctl auth login   --tenant <T> --token-stdin
+clavenarctl auth logout  --tenant <T>
+clavenarctl auth whoami  --tenant <T> [--json]
+clavenarctl agents list  --tenant <T> [--state ...] [--owner-team ...] [--json]
+clavenarctl agents get   <ID> --tenant <T> [--json]
 ```
 
 Write surface (lifecycle, all wired through the SDK):
 
 ```sh
-wardenctl agents create        --tenant <T> --name <N> --owner-team <T> \
+clavenarctl agents create        --tenant <T> --name <N> --owner-team <T> \
                                --scope <S>... --yellow-scope <S>... \
                                --attestation-kind <K>... [--description <D>] [--if-absent]
-wardenctl agents suspend       <ID> --tenant <T> [--reason <R>]
-wardenctl agents unsuspend     <ID> --tenant <T> [--reason <R>]
-wardenctl agents decommission  <ID> --tenant <T> [--reason <R>]
-wardenctl agents envelope narrow <ID> --tenant <T> --scope <S>... --yellow-scope <S>...
-wardenctl agents envelope widen  <ID> --tenant <T> --scope <S>... --yellow-scope <S>...
-wardenctl agents transfer      <ID> --tenant <T> --to-team <T>
-wardenctl agents description   <ID> --tenant <T> --text <D>
+clavenarctl agents suspend       <ID> --tenant <T> [--reason <R>]
+clavenarctl agents unsuspend     <ID> --tenant <T> [--reason <R>]
+clavenarctl agents decommission  <ID> --tenant <T> [--reason <R>]
+clavenarctl agents envelope narrow <ID> --tenant <T> --scope <S>... --yellow-scope <S>...
+clavenarctl agents envelope widen  <ID> --tenant <T> --scope <S>... --yellow-scope <S>...
+clavenarctl agents transfer      <ID> --tenant <T> --to-team <T>
+clavenarctl agents description   <ID> --tenant <T> --text <D>
 ```
 
 Migration:
 
 ```sh
-wardenctl agents migrate \
+clavenarctl agents migrate \
   --tenant <T> \
   --names path/to/agent-names.txt \
   --default-owner-team legacy-fleet \
@@ -95,7 +95,7 @@ records the human who ran the bulk enrollment.
 Regulatory exports:
 
 ```sh
-wardenctl regulatory export \
+clavenarctl regulatory export \
   --from 2026-04-01T00:00:00Z --to 2026-05-01T00:00:00Z \
   [--readme path/to/technical_documentation.md] \
   [--include-exports] \
@@ -109,20 +109,20 @@ ledger commits to its sha256 in the manifest. `--include-exports`
 asks the ledger to splice in `manifest.parquet_pointers` for any
 cold-tier snapshot whose seq range overlaps the window.
 
-Ledger URL precedence: flag → `WARDEN_LEDGER_URL` env → `http://localhost:8083`.
+Ledger URL precedence: flag → `CLAVENAR_LEDGER_URL` env → `http://localhost:8083`.
 
 ## Install
 
 ```sh
 cargo install --path .                       # from a local checkout
-cargo install --git https://github.com/vanteguardlabs/warden-ctl  # from source
+cargo install --git https://github.com/clavenar/clavenar-ctl  # from source
 ```
 
-The binary lands as `~/.cargo/bin/wardenctl`.
+The binary lands as `~/.cargo/bin/clavenarctl`.
 
 ## Auth
 
-`wardenctl auth login` caches an OIDC `id_token` per tenant in the
+`clavenarctl auth login` caches an OIDC `id_token` per tenant in the
 OS-correct credentials file (mode `0600` on Unix, opened with that
 mode atomically on create so a stolen-laptop attacker without root
 can't read another user's token; ACL-restricted on Windows by
@@ -132,11 +132,11 @@ The on-disk path follows the `directories` crate's `config_dir()`:
 
 | Platform | Path |
 |---|---|
-| Linux | `~/.config/warden/credentials.json` (or `$XDG_CONFIG_HOME/warden/...`) |
-| macOS | `~/Library/Application Support/dev.agent-warden.warden/credentials.json` |
-| Windows | `%APPDATA%\agent-warden\warden\config\credentials.json` |
+| Linux | `~/.config/clavenar/credentials.json` (or `$XDG_CONFIG_HOME/clavenar/...`) |
+| macOS | `~/Library/Application Support/dev.agent-clavenar.clavenar/credentials.json` |
+| Windows | `%APPDATA%\agent-clavenar\clavenar\config\credentials.json` |
 
-Tests and the e2e runner override the path with `WARDEN_CREDENTIALS_PATH`
+Tests and the e2e runner override the path with `CLAVENAR_CREDENTIALS_PATH`
 so they don't pollute the operator's real file.
 
 Until device-flow ships, supply the token via `--token-file
@@ -144,11 +144,11 @@ Until device-flow ships, supply the token via `--token-file
 
 ```sh
 # Mint an id_token via your IdP CLI (Okta / Entra / dex / ...).
-mint-okta-token | wardenctl auth login --tenant acme --token-stdin
+mint-okta-token | clavenarctl auth login --tenant acme --token-stdin
 
 # Subsequent reads pick up the cached bearer.
-wardenctl agents list --tenant acme --json
-wardenctl auth whoami --tenant acme
+clavenarctl agents list --tenant acme --json
+clavenarctl auth whoami --tenant acme
 ```
 
 `auth logout --tenant <T>` drops the cached entry. The `id_token`'s
@@ -159,7 +159,7 @@ every request remains the authoritative check.
 ## Configuration
 
 A `config.toml` next to the credentials file (e.g.
-`~/.config/warden/config.toml` on Linux) holds CLI defaults — optional:
+`~/.config/clavenar/config.toml` on Linux) holds CLI defaults — optional:
 
 ```toml
 identity_url = "https://identity.acme.com:8086"
@@ -169,14 +169,14 @@ default_tenant = "acme"
 Resolution order, highest priority first:
 
 1. Per-call `--identity-url` / `--tenant` flag.
-2. `WARDEN_IDENTITY_URL` / `WARDEN_TENANT` env vars.
-3. `~/.warden/config.toml`.
+2. `CLAVENAR_IDENTITY_URL` / `CLAVENAR_TENANT` env vars.
+3. `~/.clavenar/config.toml`.
 4. Built-in default for `identity_url`: `http://localhost:8086`.
    No built-in default for `--tenant` — missing fails loudly.
 
 ## Exit codes
 
-Per `warden-specs/TECH_SPEC.md#agent-onboarding-wao` §9.3, deterministic and machine-checkable:
+Per `clavenar-specs/TECH_SPEC.md#agent-onboarding-wao` §9.3, deterministic and machine-checkable:
 
 | Code | Meaning | Examples |
 |------|---------|----------|
@@ -194,18 +194,18 @@ desired state, continue", and any other non-zero as "fail loudly".
 List active agents in a tenant, JSON for piping into `jq`:
 
 ```sh
-wardenctl agents list --tenant acme --state active --json | jq '.[].agent_name'
+clavenarctl agents list --tenant acme --state active --json | jq '.[].agent_name'
 ```
 
 Get a single agent, human-readable:
 
 ```sh
-wardenctl agents get 01HW...A001 --tenant acme
+clavenarctl agents get 01HW...A001 --tenant acme
 ```
 
 ## Connect an MCP client
 
-`wardenctl mcp-bridge` is the stdio shim every MCP client uses to
+`clavenarctl mcp-bridge` is the stdio shim every MCP client uses to
 ride the proxy. The same bridge serves Claude Code, Cursor, Cline,
 Continue, the Codex CLI, and any generic stdio MCP client — only
 the per-client config-file shape differs.
@@ -232,8 +232,8 @@ cargo clippy --all-targets -- -D warnings
 ```
 
 The crate is **not** part of a Cargo workspace — it sits next to its
-sibling repos under `claude/repos/` and depends on `warden-sdk` via a
-`path = "../warden-sdk"` dep. See the parent repo layout for the
+sibling repos under `claude/repos/` and depends on `clavenar-sdk` via a
+`path = "../clavenar-sdk"` dep. See the parent repo layout for the
 multi-repo layout.
 
 ## License

@@ -1,9 +1,9 @@
-//! `wardenctl agents migrate` — bulk-enroll existing SVID-only agents
-//! onto the registered-agents table (warden-specs/TECH_SPEC.md#agent-onboarding-wao §7.3, §13.1.7).
+//! `clavenarctl agents migrate` — bulk-enroll existing SVID-only agents
+//! onto the registered-agents table (clavenar-specs/TECH_SPEC.md#agent-onboarding-wao §7.3, §13.1.7).
 //!
 //! Migration deliverable. The migration command is the official adoption path
 //! for the mode flip from `Warn` to `Enforce`: an operator runs
-//! `wardenctl agents migrate` once with default `(owner_team, scope,
+//! `clavenarctl agents migrate` once with default `(owner_team, scope,
 //! kinds)` for the legacy fleet, identity creates one row per
 //! `(tenant, agent_name)` it finds in the SVID issuance log, and from
 //! that point on `/svid` and `/grant` enforce against a populated
@@ -49,7 +49,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use clap::Args;
-use warden_sdk::{
+use clavenar_sdk::{
     create_request_matches, AgentsClient, CreateAgentRequest, MIGRATION_ACTOR_SUB_PREFIX,
 };
 
@@ -59,7 +59,7 @@ use crate::ExitCode;
 
 #[derive(Debug, Args)]
 pub(crate) struct MigrateArgs {
-    /// Tenant to migrate within. Falls back to `WARDEN_TENANT`, then
+    /// Tenant to migrate within. Falls back to `CLAVENAR_TENANT`, then
     /// the config's `default_tenant`.
     #[arg(long)]
     pub tenant: Option<String>,
@@ -361,7 +361,7 @@ mod tests {
     }
 
     /// The migration prefix constant must be stable wire-shape; if
-    /// `warden-sdk` rewrote it the chain row's `actor_sub` field
+    /// `clavenar-sdk` rewrote it the chain row's `actor_sub` field
     /// would silently shift and break audit consumers.
     #[test]
     fn migration_prefix_constant_is_stable() {

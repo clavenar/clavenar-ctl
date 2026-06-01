@@ -1,4 +1,4 @@
-//! `wardenctl policy test <file.rego>` — Policy Lab CLI.
+//! `clavenarctl policy test <file.rego>` — Policy Lab CLI.
 //!
 //! Reads a candidate Rego file, fetches a replay corpus from the
 //! ledger over a configurable time window, and POSTs the corpus +
@@ -15,12 +15,12 @@
 //!
 //! `--fail-on-regression` exits 2 when ANY catalog regression is
 //! detected. The catalog half is wired up via the
-//! `warden-chaos-catalog` path-dep on warden-console; the CLI
+//! `clavenar-chaos-catalog` path-dep on clavenar-console; the CLI
 //! re-implements a minimal catalog wrapper inline so this binary
 //! stays light.
 //!
 //! Hits the policy engine and ledger via the shared SDK. Bearer
-//! token: `WARDEN_POLICY_TEST_BEARER` (optional — for the prod
+//! token: `CLAVENAR_POLICY_TEST_BEARER` (optional — for the prod
 //! deployment that fronts the policy engine with token auth).
 
 use std::collections::BTreeMap;
@@ -28,10 +28,10 @@ use std::path::PathBuf;
 
 use chrono::{DateTime, Duration as CDuration, Utc};
 use clap::{Args, Subcommand};
-use warden_sdk::{
+use clavenar_sdk::{
     parse_batch_error, parse_mine_error, BatchMode, BatchVerdict, CreatePolicyRequest, DiffClass,
     EvaluateBatchRequest, EvaluateBatchResponse, LedgerClient, MineCandidate, MineRequest,
-    MineResponse, PoliciesClient, ReplayCorpusParams, WardenError,
+    MineResponse, PoliciesClient, ReplayCorpusParams, ClavenarError,
 };
 
 use crate::ExitCode;
@@ -100,11 +100,11 @@ pub(crate) struct LearnArgs {
     /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
-    /// Override the ledger URL (defaults to `WARDEN_LEDGER_URL` or
+    /// Override the ledger URL (defaults to `CLAVENAR_LEDGER_URL` or
     /// `http://localhost:8083`).
     #[arg(long)]
     pub ledger_url: Option<String>,
-    /// Override the policy-engine URL (defaults to `WARDEN_POLICY_URL`
+    /// Override the policy-engine URL (defaults to `CLAVENAR_POLICY_URL`
     /// or `http://localhost:8082`).
     #[arg(long)]
     pub policy_url: Option<String>,
@@ -119,13 +119,13 @@ pub(crate) struct LearnArgs {
     #[arg(long)]
     pub client_key: Option<PathBuf>,
     /// CA cert (PEM) used to verify the server cert on outbound mTLS
-    /// hops. Should match the env's CA bundle (warden-proxy/certs/ca.crt
+    /// hops. Should match the env's CA bundle (clavenar-proxy/certs/ca.crt
     /// for prod, certs-dev/ca.crt for dev).
     #[arg(long)]
     pub ca_cert: Option<PathBuf>,
     /// Map a docker-internal hostname to a host:port. Repeatable.
     /// Mirrors `curl --resolve NAME:PORT:ADDR`. Use this when running
-    /// wardenctl from the host against a compose stack — the cert
+    /// clavenarctl from the host against a compose stack — the cert
     /// SANs target `ledger` / `policy-engine`, but those don't resolve
     /// outside the docker network.
     ///
@@ -172,11 +172,11 @@ pub(crate) struct TestArgs {
     /// Machine-readable JSON output.
     #[arg(long)]
     pub json: bool,
-    /// Override the ledger URL (defaults to `WARDEN_LEDGER_URL` or
+    /// Override the ledger URL (defaults to `CLAVENAR_LEDGER_URL` or
     /// `http://localhost:8083`).
     #[arg(long)]
     pub ledger_url: Option<String>,
-    /// Override the policy-engine URL (defaults to `WARDEN_POLICY_URL`
+    /// Override the policy-engine URL (defaults to `CLAVENAR_POLICY_URL`
     /// or `http://localhost:8082`).
     #[arg(long)]
     pub policy_url: Option<String>,
@@ -245,12 +245,12 @@ async fn run_test(args: TestArgs) -> ExitCode {
     let ledger_url = args
         .ledger_url
         .clone()
-        .or_else(|| std::env::var("WARDEN_LEDGER_URL").ok())
+        .or_else(|| std::env::var("CLAVENAR_LEDGER_URL").ok())
         .unwrap_or_else(|| "http://localhost:8083".into());
     let policy_url = args
         .policy_url
         .clone()
-        .or_else(|| std::env::var("WARDEN_POLICY_URL").ok())
+        .or_else(|| std::env::var("CLAVENAR_POLICY_URL").ok())
         .unwrap_or_else(|| "http://localhost:8082".into());
 
     let ledger = match LedgerClient::new(&ledger_url) {
@@ -387,8 +387,8 @@ async fn run_test(args: TestArgs) -> ExitCode {
     ExitCode::Ok
 }
 
-fn surface_batch_error(e: WardenError) -> ExitCode {
-    if let WardenError::Server { status, body } = &e
+fn surface_batch_error(e: ClavenarError) -> ExitCode {
+    if let ClavenarError::Server { status, body } = &e
         && status.as_u16() == 400
         && let Some(parsed) = parse_batch_error(body)
     {
@@ -403,7 +403,7 @@ fn surface_batch_error(e: WardenError) -> ExitCode {
         return ExitCode::Validation;
     }
     eprintln!("error: evaluate-batch: {}", e);
-    ExitCode::from_warden_error(&e)
+    ExitCode::from_clavenar_error(&e)
 }
 
 fn print_human(
@@ -493,8 +493,8 @@ fn parse_window(s: &str) -> Result<CDuration, String> {
     }
 }
 
-/// Synthetic chaos-catalog inputs. The full warden-chaos-catalog data
-/// pack lives in a sibling repo; for the v1 wardenctl path we ship a
+/// Synthetic chaos-catalog inputs. The full clavenar-chaos-catalog data
+/// pack lives in a sibling repo; for the v1 clavenarctl path we ship a
 /// stable shortlist inline so the CLI binary doesn't path-dep on the
 /// catalog crate (it'd carry a 2 MB compile cost for a 6-attack
 /// fingerprint). The console's Lab page consumes the full catalog
@@ -544,7 +544,7 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
     {
         let mut e = base("delete_repo", 0.05);
         e["agent_spiffe"] = serde_json::json!(
-            "spiffe://warden.local/tenant/acme/agent/del/instance/x"
+            "spiffe://clavenar.local/tenant/acme/agent/del/instance/x"
         );
         v.push(e);
     }
@@ -555,7 +555,7 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
     {
         let mut e = base("phi_export", 0.05);
         e["agent_spiffe"] = serde_json::json!(
-            "spiffe://warden.local/tenant/acme/agent/clinical/instance/1"
+            "spiffe://clavenar.local/tenant/acme/agent/clinical/instance/1"
         );
         e["arguments"] = serde_json::json!({
             "patient_count": 250,
@@ -567,7 +567,7 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
             "measurement": "dev-binary-hash",
             "issued_at": "2026-04-29T13:55:00Z",
             "expires_at": "2026-04-29T14:10:00Z",
-            "nonce_echo": "warden-mock-nonce",
+            "nonce_echo": "clavenar-mock-nonce",
         });
         v.push(e);
     }
@@ -579,7 +579,7 @@ fn unused_to_keep_btreemap_import() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::new()
 }
 
-// ── `wardenctl policy learn` ──────────────────────────────────────────
+// ── `clavenarctl policy learn` ──────────────────────────────────────────
 
 async fn run_learn(args: LearnArgs) -> ExitCode {
     let since = match parse_window(&args.since) {
@@ -593,12 +593,12 @@ async fn run_learn(args: LearnArgs) -> ExitCode {
     let ledger_url = args
         .ledger_url
         .clone()
-        .or_else(|| std::env::var("WARDEN_LEDGER_URL").ok())
+        .or_else(|| std::env::var("CLAVENAR_LEDGER_URL").ok())
         .unwrap_or_else(|| "http://localhost:8083".into());
     let policy_url = args
         .policy_url
         .clone()
-        .or_else(|| std::env::var("WARDEN_POLICY_URL").ok())
+        .or_else(|| std::env::var("CLAVENAR_POLICY_URL").ok())
         .unwrap_or_else(|| "http://localhost:8082".into());
 
     let resolve_pairs = match parse_resolve(&args.resolve) {
@@ -782,7 +782,7 @@ fn render_learn_summary(resp: &MineResponse, corpus_returned: i64, window: &str)
         );
         println!();
     }
-    println!("To land a candidate:  wardenctl policy learn --accept <id>");
+    println!("To land a candidate:  clavenarctl policy learn --accept <id>");
 }
 
 async fn accept_candidate(
@@ -834,15 +834,15 @@ async fn create_draft(policy: &PoliciesClient, c: &MineCandidate) -> ExitCode {
         "Self-Learn miner (candidate {}, kind={}, evidence={})",
         c.id, c.kind, c.evidence_count
     );
-    // wardenctl runs operator-side, no OIDC session — stamp the
-    // actor as `wardenctl` so the audit trail still has a value.
+    // clavenarctl runs operator-side, no OIDC session — stamp the
+    // actor as `clavenarctl` so the audit trail still has a value.
     let req = CreatePolicyRequest {
         name: &c.rule_name,
         content_type: "rego",
         body: &c.rego_body,
         reason: &reason,
-        actor_sub: "wardenctl",
-        actor_idp: "wardenctl",
+        actor_sub: "clavenarctl",
+        actor_idp: "clavenarctl",
         active: Some(false),
     };
     match policy.create(&req).await {
@@ -852,7 +852,7 @@ async fn create_draft(policy: &PoliciesClient, c: &MineCandidate) -> ExitCode {
         }
         Err(e) => {
             eprintln!("error: create draft {}: {}", c.rule_name, e);
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -938,13 +938,13 @@ fn extract_string_array(v: &serde_json::Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn surface_mine_error(err: WardenError) -> ExitCode {
-    if let WardenError::Server { ref body, .. } = err
+fn surface_mine_error(err: ClavenarError) -> ExitCode {
+    if let ClavenarError::Server { ref body, .. } = err
         && let Some(parsed) = parse_mine_error(body)
     {
         eprintln!("error: miner rejected request: {}", parsed.message);
         return ExitCode::Validation;
     }
     eprintln!("error: miner request failed: {}", err);
-    ExitCode::from_warden_error(&err)
+    ExitCode::from_clavenar_error(&err)
 }

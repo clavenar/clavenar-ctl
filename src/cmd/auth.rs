@@ -1,14 +1,14 @@
-//! `wardenctl auth` — login / logout / whoami.
+//! `clavenarctl auth` — login / logout / whoami.
 //!
 //! Initial surface: a "manual paste" login that reads a pre-minted
 //! `id_token` from a file or stdin and caches it in the OS-correct
-//! credentials file (Linux: `~/.config/warden/credentials.json`).
+//! credentials file (Linux: `~/.config/clavenar/credentials.json`).
 //! The full RFC 8628 device-authorization grant lands later with the
 //! dex mock.
 //!
 //! Why "manual paste" first: the e2e runner (`run-onboarding.sh`)
 //! mints id_tokens directly via `dex /token` (password grant) and
-//! stuffs the credentials file before invoking other `wardenctl`
+//! stuffs the credentials file before invoking other `clavenarctl`
 //! commands — that's the same path the operator uses today (mint a
 //! token via the IdP CLI, paste it in). Device-flow ships when we
 //! actually have an IdP that implements RFC 8628.
@@ -44,7 +44,7 @@ pub(crate) struct LoginArgs {
     /// exclusive with `--token-stdin`.
     #[arg(long, conflicts_with = "token_stdin")]
     pub token_file: Option<std::path::PathBuf>,
-    /// Read the token from stdin (`cat token | wardenctl auth login
+    /// Read the token from stdin (`cat token | clavenarctl auth login
     /// --tenant acme --token-stdin`).
     #[arg(long, conflicts_with = "token_file")]
     pub token_stdin: bool,
@@ -174,7 +174,7 @@ fn whoami(args: WhoamiArgs) -> ExitCode {
         Some(e) => e,
         None => {
             eprintln!(
-                "no cached credentials for tenant '{}' — run `wardenctl auth login`",
+                "no cached credentials for tenant '{}' — run `clavenarctl auth login`",
                 args.tenant
             );
             return ExitCode::Auth;

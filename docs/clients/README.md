@@ -1,7 +1,7 @@
-# Connect an MCP client to Agent Warden
+# Connect an MCP client to Clavenar
 
-Every MCP client riding the Warden proxy reaches the `/mcp` surface
-through the same shim: `wardenctl mcp-bridge`. The bridge speaks
+Every MCP client riding the Clavenar proxy reaches the `/mcp` surface
+through the same shim: `clavenarctl mcp-bridge`. The bridge speaks
 newline-delimited JSON-RPC on stdin / stdout (what every MCP client
 already drives) and forwards each frame over mTLS to the proxy.
 What differs between clients is **only the config-file shape** —
@@ -20,18 +20,18 @@ where the client expects its `mcpServers` definition to live.
 
 Every recipe assumes you already have:
 
-1. **A warden stack reachable over mTLS** — `prod` at
-   `https://proxy.warden.local:8086` or `dev` at `https://localhost:19443`.
-2. **A client cert pair** issued by the warden CA, with the agent's
+1. **A clavenar stack reachable over mTLS** — `prod` at
+   `https://proxy.clavenar.local:8086` or `dev` at `https://localhost:19443`.
+2. **A client cert pair** issued by the clavenar CA, with the agent's
    SPIFFE URI in the SAN (or CN fallback). Mint one for the smoke
    flow with:
    ```bash
-   cd repos/warden-proxy && ./scripts/gen_certs.sh --env dev
+   cd repos/clavenar-proxy && ./scripts/gen_certs.sh --env dev
    # → certs-dev/client.crt + client.key + ca.crt
    ```
    For real agents, use
-   `wardenctl agents create <name>` to enroll and have
-   `warden-identity` mint a short-lived SVID.
+   `clavenarctl agents create <name>` to enroll and have
+   `clavenar-identity` mint a short-lived SVID.
 3. **Vault stub credentials for the agent_id** — the proxy gates every
    request on the presence of a Vault entry:
    ```bash
@@ -60,7 +60,7 @@ After wiring the config and starting the client:
 
 ## `--client-hint` flag
 
-`wardenctl mcp-bridge` accepts `--client-hint <name>` where `<name>`
+`clavenarctl mcp-bridge` accepts `--client-hint <name>` where `<name>`
 is one of `claude-code`, `cursor`, `cline`, `continue`, `codex`,
 `generic`. Today the flag is **informational only** — the bridge
 logs the hint to stderr at boot and passes JSON-RPC frames verbatim.

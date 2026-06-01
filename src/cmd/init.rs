@@ -1,11 +1,11 @@
-//! `wardenctl init` — scaffold a fresh operator config + (optionally)
+//! `clavenarctl init` — scaffold a fresh operator config + (optionally)
 //! emit a starter policy directory.
 //!
 //! Idempotent by default: refuses to clobber an existing
 //! `config.toml`. Pass `--force` to rewrite. The intent is the
 //! first-run experience for a partner-day-1 operator who just
-//! `cargo install`'d wardenctl and wants the cheapest path from zero
-//! to "I can run `wardenctl doctor`."
+//! `cargo install`'d clavenarctl and wants the cheapest path from zero
+//! to "I can run `clavenarctl doctor`."
 
 use std::path::PathBuf;
 
@@ -26,17 +26,17 @@ pub(crate) struct InitArgs {
     #[arg(long)]
     pub tenant: Option<String>,
 
-    /// Ledger service base URL (used by `wardenctl doctor`).
+    /// Ledger service base URL (used by `clavenarctl doctor`).
     /// Default `http://localhost:8083`.
     #[arg(long)]
     pub ledger_url: Option<String>,
 
-    /// HIL service base URL (used by `wardenctl doctor`).
+    /// HIL service base URL (used by `clavenarctl doctor`).
     /// Default `http://localhost:8084`.
     #[arg(long)]
     pub hil_url: Option<String>,
 
-    /// Console base URL (used by `wardenctl doctor`).
+    /// Console base URL (used by `clavenarctl doctor`).
     /// Default `http://localhost:8085`.
     #[arg(long)]
     pub console_url: Option<String>,
@@ -49,7 +49,7 @@ pub(crate) struct InitArgs {
     /// Optionally emit a starter `policies/` directory in the current
     /// working directory with `governance.rego` + every policy
     /// template under `templates/`. Off by default — call
-    /// `wardenctl generate-policy` for individual templates.
+    /// `clavenarctl generate-policy` for individual templates.
     #[arg(long)]
     pub with_policies: bool,
 
@@ -95,12 +95,12 @@ pub(crate) async fn run(args: InitArgs) -> ExitCode {
         }
     };
     // Header comment makes the file human-discoverable — operators
-    // who only know `wardenctl init` can `cat` the file and learn
+    // who only know `clavenarctl init` can `cat` the file and learn
     // every knob without `--help`.
     let header = format!(
-        "# wardenctl operator config — written by `wardenctl init` on {}.\n\
-         # Per-call --flag and WARDEN_* env vars override these values.\n\
-         # See `wardenctl --help` for the full list.\n\n",
+        "# clavenarctl operator config — written by `clavenarctl init` on {}.\n\
+         # Per-call --flag and CLAVENAR_* env vars override these values.\n\
+         # See `clavenarctl --help` for the full list.\n\n",
         chrono::Utc::now().to_rfc3339()
     );
     let full = format!("{}{}", header, body);
@@ -135,8 +135,8 @@ pub(crate) async fn run(args: InitArgs) -> ExitCode {
 
     eprintln!();
     eprintln!("next steps:");
-    eprintln!("  wardenctl doctor                 # probe the running stack");
-    eprintln!("  wardenctl generate-policy list   # browse the policy starter pack");
-    eprintln!("  wardenctl auth login --help      # authenticate against warden-identity");
+    eprintln!("  clavenarctl doctor                 # probe the running stack");
+    eprintln!("  clavenarctl generate-policy list   # browse the policy starter pack");
+    eprintln!("  clavenarctl auth login --help      # authenticate against clavenar-identity");
     ExitCode::Ok
 }

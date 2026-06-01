@@ -1,8 +1,8 @@
-# warden-ctl sequence diagrams
+# clavenar-ctl sequence diagrams
 
-Operator CLI for Agent Warden. Every diagram below traces one
-subcommand from the shell prompt through `warden-sdk` and out to a
-warden service, ordered against the actual source: `src/main.rs`,
+Operator CLI for Clavenar. Every diagram below traces one
+subcommand from the shell prompt through `clavenar-sdk` and out to a
+clavenar service, ordered against the actual source: `src/main.rs`,
 `src/cmd/*.rs`, `src/credentials.rs`, `src/config.rs`.
 
 ## Lifelines
@@ -10,16 +10,16 @@ warden service, ordered against the actual source: `src/main.rs`,
 | Lifeline | Role | Source |
 |---|---|---|
 | Operator | Human at the shell or a CI runner. | — |
-| Wardenctl | The CLI process — dispatcher in `main.rs`, subcommand handler in `cmd/*.rs`. | `src/main.rs::run` |
-| Credentials | OS-correct credentials file. Linux: `~/.config/warden/credentials.json`. Carries one `TenantCredential` per tenant. | `src/credentials.rs` |
-| Config | `~/.warden/config.toml` — service URLs, default tenant, output formatting. | `src/config.rs` |
-| SDK | `warden-sdk` typed clients: `AgentsClient`, `LedgerClient`, `PoliciesClient`. | external |
-| Identity | `warden-identity` — agents lifecycle. | external |
-| Ledger | `warden-ledger` — `/audit/replay/corpus`, `/export/regulatory`. | external |
-| Policy | `warden-policy-engine` — `/policies/evaluate-batch`, `/policies/mine`. | external |
-| Proxy | `warden-proxy` mTLS `/mcp` — the mcp-bridge target. | external |
-| MCPClient | Real MCP client (Claude Code, Cursor, Cline, Continue, Codex, generic) — talks to wardenctl over stdio. | external |
-| ExitMap | `ExitCode::from_warden_error` — spec §9.3 mapping. | `src/main.rs::ExitCode` |
+| Clavenarctl | The CLI process — dispatcher in `main.rs`, subcommand handler in `cmd/*.rs`. | `src/main.rs::run` |
+| Credentials | OS-correct credentials file. Linux: `~/.config/clavenar/credentials.json`. Carries one `TenantCredential` per tenant. | `src/credentials.rs` |
+| Config | `~/.clavenar/config.toml` — service URLs, default tenant, output formatting. | `src/config.rs` |
+| SDK | `clavenar-sdk` typed clients: `AgentsClient`, `LedgerClient`, `PoliciesClient`. | external |
+| Identity | `clavenar-identity` — agents lifecycle. | external |
+| Ledger | `clavenar-ledger` — `/audit/replay/corpus`, `/export/regulatory`. | external |
+| Policy | `clavenar-policy-engine` — `/policies/evaluate-batch`, `/policies/mine`. | external |
+| Proxy | `clavenar-proxy` mTLS `/mcp` — the mcp-bridge target. | external |
+| MCPClient | Real MCP client (Claude Code, Cursor, Cline, Continue, Codex, generic) — talks to clavenarctl over stdio. | external |
+| ExitMap | `ExitCode::from_clavenar_error` — spec §9.3 mapping. | `src/main.rs::ExitCode` |
 
 Every subcommand resolves three things up-front: the service URL
 (flag → env → config → built-in), the tenant (flag → env → config),
@@ -29,7 +29,7 @@ in any of these surface as `Validation` (bad URL / arg shape) or
 
 ---
 
-## 1. `wardenctl auth login` — cache an OIDC id_token
+## 1. `clavenarctl auth login` — cache an OIDC id_token
 
 Initial surface is "manual paste" — read a pre-minted `id_token`
 from `--token-file` or `--token-stdin` and cache it. RFC 8628
@@ -41,40 +41,40 @@ verifier on first use.
 sequenceDiagram
     autonumber
     participant Operator
-    participant Wardenctl as login handler
+    participant Clavenarctl as login handler
     participant Stdin as stdin / token_file
     participant Decode as unverified_decode
     participant Credentials
 
-    Operator->>Wardenctl: wardenctl auth login --tenant acme --token-file ./id_token
+    Operator->>Clavenarctl: clavenarctl auth login --tenant acme --token-file ./id_token
 
     alt neither --token-file nor --token-stdin
-        Wardenctl--xOperator: stderr error. exit Validation (2). RFC 8628 follow-up is in the roadmap.
+        Clavenarctl--xOperator: stderr error. exit Validation (2). RFC 8628 follow-up is in the roadmap.
     end
 
     alt --token-file
-        Wardenctl->>Stdin: fs::read_to_string(path)
-        Stdin-->>Wardenctl: token text (trimmed)
+        Clavenarctl->>Stdin: fs::read_to_string(path)
+        Stdin-->>Clavenarctl: token text (trimmed)
     else --token-stdin
-        Wardenctl->>Stdin: stdin.read_to_string
-        Stdin-->>Wardenctl: token text (trimmed)
+        Clavenarctl->>Stdin: stdin.read_to_string
+        Stdin-->>Clavenarctl: token text (trimmed)
     end
 
     alt empty token
-        Wardenctl--xOperator: stderr error. exit Validation.
+        Clavenarctl--xOperator: stderr error. exit Validation.
     end
 
-    Wardenctl->>Decode: unverified_decode(token)
+    Clavenarctl->>Decode: unverified_decode(token)
     Note over Decode: best-effort JWT parse. extracts sub + iss + exp for the bookkeeping fields only. Malformed token still proceeds.
-    Decode-->>Wardenctl: TenantClaims (sub, issuer, exp) all Optional
+    Decode-->>Clavenarctl: TenantClaims (sub, issuer, exp) all Optional
 
-    Wardenctl->>Credentials: load() from OS-correct path
-    Credentials-->>Wardenctl: CredentialStore (HashMap of tenant -> TenantCredential)
-    Wardenctl-->>Wardenctl: store.tenants.insert(tenant, TenantCredential{id_token, sub, issuer, expires_at})
-    Wardenctl->>Credentials: save(&store)
+    Clavenarctl->>Credentials: load() from OS-correct path
+    Credentials-->>Clavenarctl: CredentialStore (HashMap of tenant -> TenantCredential)
+    Clavenarctl-->>Clavenarctl: store.tenants.insert(tenant, TenantCredential{id_token, sub, issuer, expires_at})
+    Clavenarctl->>Credentials: save(&store)
 
-    Wardenctl-->>Operator: stdout "logged in to tenant 'acme' as <sub> (cached at <path>)"
-    Wardenctl-->>Operator: exit Ok (0)
+    Clavenarctl-->>Operator: stdout "logged in to tenant 'acme' as <sub> (cached at <path>)"
+    Clavenarctl-->>Operator: exit Ok (0)
 ```
 
 **Non-obvious behaviour.**
@@ -86,7 +86,7 @@ sequenceDiagram
   pattern of minting tokens via dex's password grant and stuffing
   the credentials file directly.
 - The credentials file lives at the OS-correct path
-  (Linux: `~/.config/warden/credentials.json`). The path is
+  (Linux: `~/.config/clavenar/credentials.json`). The path is
   exposed in stderr on login so an operator can `cat` it to
   inspect what was stored.
 - `--token-file` and `--token-stdin` are mutually exclusive at
@@ -98,7 +98,7 @@ sequenceDiagram
 
 ---
 
-## 2. `wardenctl agents <lifecycle-verb>` — bearer-authenticated write
+## 2. `clavenarctl agents <lifecycle-verb>` — bearer-authenticated write
 
 Representative lifecycle write (suspend / unsuspend / decommission
 / envelope-narrow / envelope-widen / transfer / description). All
@@ -109,32 +109,32 @@ share the same plumbing — load creds, resolve tenant, build
 sequenceDiagram
     autonumber
     participant Operator
-    participant Wardenctl as suspend handler
+    participant Clavenarctl as suspend handler
     participant Config
     participant Credentials
-    participant SDK as AgentsClient (warden-sdk)
+    participant SDK as AgentsClient (clavenar-sdk)
     participant Identity
     participant ExitMap
 
-    Operator->>Wardenctl: wardenctl agents suspend <agent-uuid> --tenant acme --reason "anomaly"
+    Operator->>Clavenarctl: clavenarctl agents suspend <agent-uuid> --tenant acme --reason "anomaly"
 
-    Wardenctl->>Config: resolve_tenant(--tenant, env WARDEN_TENANT, cfg.default_tenant)
+    Clavenarctl->>Config: resolve_tenant(--tenant, env CLAVENAR_TENANT, cfg.default_tenant)
     alt resolve fails (no value anywhere)
-        Wardenctl--xOperator: stderr error. exit Validation.
+        Clavenarctl--xOperator: stderr error. exit Validation.
     end
-    Config-->>Wardenctl: tenant = "acme"
+    Config-->>Clavenarctl: tenant = "acme"
 
-    Wardenctl->>Credentials: load()
-    Credentials-->>Wardenctl: CredentialStore
-    Wardenctl->>Credentials: bearer_for(&store, "acme")
+    Clavenarctl->>Credentials: load()
+    Credentials-->>Clavenarctl: CredentialStore
+    Clavenarctl->>Credentials: bearer_for(&store, "acme")
     alt no cached creds for tenant
-        Credentials--xWardenctl: error
-        Wardenctl--xOperator: stderr. exit Auth (3). "run wardenctl auth login first"
+        Credentials--xClavenarctl: error
+        Clavenarctl--xOperator: stderr. exit Auth (3). "run clavenarctl auth login first"
     end
-    Credentials-->>Wardenctl: id_token string
+    Credentials-->>Clavenarctl: id_token string
 
-    Wardenctl->>SDK: AgentsClient::new(identity_url).with_bearer(id_token)
-    Wardenctl->>SDK: suspend(agent_uuid, LifecycleRequest{reason})
+    Clavenarctl->>SDK: AgentsClient::new(identity_url).with_bearer(id_token)
+    Clavenarctl->>SDK: suspend(agent_uuid, LifecycleRequest{reason})
 
     SDK->>Identity: POST /agents/{id}/suspend
     Identity-->>Identity: capability resolve (OIDC verify + tenant check + agents:suspend cap)
@@ -142,14 +142,14 @@ sequenceDiagram
 
     alt 200 OK
         Identity-->>SDK: LifecycleResponse (new state, envelope, chain_seq)
-        SDK-->>Wardenctl: LifecycleResponse
-        Wardenctl-->>Operator: stdout summary OR --json body. exit Ok.
+        SDK-->>Clavenarctl: LifecycleResponse
+        Clavenarctl-->>Operator: stdout summary OR --json body. exit Ok.
     else 401 / 403 / 404 / 409 / 503
-        Identity-->>SDK: WardenError
-        SDK-->>Wardenctl: WardenError
-        Wardenctl->>ExitMap: from_warden_error(&err)
-        ExitMap-->>Wardenctl: ExitCode (Auth | Validation | Conflict | Server)
-        Wardenctl-->>Operator: stderr "error: ..." . exit matching code.
+        Identity-->>SDK: ClavenarError
+        SDK-->>Clavenarctl: ClavenarError
+        Clavenarctl->>ExitMap: from_clavenar_error(&err)
+        ExitMap-->>Clavenarctl: ExitCode (Auth | Validation | Conflict | Server)
+        Clavenarctl-->>Operator: stderr "error: ..." . exit matching code.
     end
 ```
 
@@ -159,7 +159,7 @@ sequenceDiagram
   beats env, env beats config. There is no implicit single-tenant
   fall-through — multi-tenant operators get a loud error rather
   than silently writing to the wrong tenant.
-- `WardenError` mapping is shared via `ExitCode::from_warden_error`
+- `ClavenarError` mapping is shared via `ExitCode::from_clavenar_error`
   in `main.rs`. Every subcommand routes through it so the spec
   §9.3 exit-code contract has one update site. Adding a new
   4xx-mapping pattern in one place automatically covers every
@@ -174,7 +174,7 @@ sequenceDiagram
 
 ---
 
-## 3. `wardenctl agents create --if-absent` — idempotent IaC pattern
+## 3. `clavenarctl agents create --if-absent` — idempotent IaC pattern
 
 The "IaC without Terraform" pattern called out in spec §5.2. A
 pre-fetch by `(tenant, agent_name)` decides whether to POST. On a
@@ -185,49 +185,49 @@ writing** — drift requires operator intervention.
 sequenceDiagram
     autonumber
     participant Operator
-    participant Wardenctl as create handler
+    participant Clavenarctl as create handler
     participant SDK as AgentsClient
     participant Identity
     participant Match as create_request_matches
 
-    Operator->>Wardenctl: wardenctl agents create --tenant acme --name support-bot-3 --owner-team support --scope ... --if-absent
+    Operator->>Clavenarctl: clavenarctl agents create --tenant acme --name support-bot-3 --owner-team support --scope ... --if-absent
 
-    Wardenctl-->>Wardenctl: resolve tenant + bearer (diagram 2 prelude)
-    Wardenctl-->>Wardenctl: build CreateAgentRequest from flags
+    Clavenarctl-->>Clavenarctl: resolve tenant + bearer (diagram 2 prelude)
+    Clavenarctl-->>Clavenarctl: build CreateAgentRequest from flags
 
-    Wardenctl->>SDK: find_by_name(tenant, name)
+    Clavenarctl->>SDK: find_by_name(tenant, name)
     SDK->>Identity: GET /agents?tenant=acme&agent_name=support-bot-3
     Identity-->>SDK: Option<AgentRecord>
 
     alt --if-absent AND row exists
-        SDK-->>Wardenctl: Some(AgentRecord)
-        Wardenctl->>Match: create_request_matches(&req, &record)
+        SDK-->>Clavenarctl: Some(AgentRecord)
+        Clavenarctl->>Match: create_request_matches(&req, &record)
         Note over Match: pure-function diff against the on-disk request shape. Compares scope_envelope, yellow_envelope, attestation_kinds, owner_team, description.
         alt matches every field
-            Match-->>Wardenctl: true
-            Wardenctl-->>Operator: stdout "agent already registered (no-op)" exit Ok (0).
+            Match-->>Clavenarctl: true
+            Clavenarctl-->>Operator: stdout "agent already registered (no-op)" exit Ok (0).
         else differs
-            Match-->>Wardenctl: false
-            Wardenctl-->>Operator: stderr "agent exists but differs — manual intervention required" exit Conflict (4). NO write happens.
+            Match-->>Clavenarctl: false
+            Clavenarctl-->>Operator: stderr "agent exists but differs — manual intervention required" exit Conflict (4). NO write happens.
         end
     else --if-absent AND no row
-        SDK-->>Wardenctl: None
-        Wardenctl->>SDK: create(req)
+        SDK-->>Clavenarctl: None
+        Clavenarctl->>SDK: create(req)
         SDK->>Identity: POST /agents
-        Identity-->>SDK: 201 AgentCreated OR WardenError
+        Identity-->>SDK: 201 AgentCreated OR ClavenarError
         alt success
-            SDK-->>Wardenctl: AgentCreated (id, spiffe_id_pattern)
-            Wardenctl-->>Operator: stdout summary. exit Ok.
+            SDK-->>Clavenarctl: AgentCreated (id, spiffe_id_pattern)
+            Clavenarctl-->>Operator: stdout summary. exit Ok.
         else 409 name_taken (race against another writer between find_by_name and create)
-            SDK-->>Wardenctl: WardenError::Server status=409
-            Wardenctl-->>Operator: exit Conflict.
+            SDK-->>Clavenarctl: ClavenarError::Server status=409
+            Clavenarctl-->>Operator: exit Conflict.
         end
     else no --if-absent
-        Wardenctl->>SDK: create(req)
+        Clavenarctl->>SDK: create(req)
         SDK->>Identity: POST /agents
         Note over Identity: same response handling as the if-absent miss branch
-        SDK-->>Wardenctl: AgentCreated OR WardenError
-        Wardenctl-->>Operator: stdout OR exit-code-matched stderr
+        SDK-->>Clavenarctl: AgentCreated OR ClavenarError
+        Clavenarctl-->>Operator: stdout OR exit-code-matched stderr
     end
 ```
 
@@ -256,7 +256,7 @@ sequenceDiagram
 
 ---
 
-## 4. `wardenctl policy test` — Policy Lab CLI driver
+## 4. `clavenarctl policy test` — Policy Lab CLI driver
 
 Replay a candidate Rego rule against the last N days of real
 ledger traffic. Two services, two SDK clients, one verdict. The
@@ -266,65 +266,65 @@ ledger traffic. Two services, two SDK clients, one verdict. The
 sequenceDiagram
     autonumber
     participant Operator
-    participant Wardenctl as test handler
+    participant Clavenarctl as test handler
     participant SDK as LedgerClient + PoliciesClient
     participant Ledger
     participant Policy
     participant Lift as parse_batch_error
 
-    Operator->>Wardenctl: wardenctl policy test ./draft.rego --since 7d --fail-on-regression
+    Operator->>Clavenarctl: clavenarctl policy test ./draft.rego --since 7d --fail-on-regression
 
-    Wardenctl-->>Wardenctl: read draft.rego from disk
-    Wardenctl-->>Wardenctl: parse --since (Nh / Nd / ISO duration). default 7d.
+    Clavenarctl-->>Clavenarctl: read draft.rego from disk
+    Clavenarctl-->>Clavenarctl: parse --since (Nh / Nd / ISO duration). default 7d.
 
-    Wardenctl->>SDK: LedgerClient::new(ledger_url). optional with_http_client (mTLS Identity).
-    Wardenctl->>SDK: replay_corpus(ReplayCorpusParams{since, limit, agent_id, tool_type})
+    Clavenarctl->>SDK: LedgerClient::new(ledger_url). optional with_http_client (mTLS Identity).
+    Clavenarctl->>SDK: replay_corpus(ReplayCorpusParams{since, limit, agent_id, tool_type})
     SDK->>Ledger: GET /audit/replay/corpus?since=..&limit=..
     Note over Ledger: operator-only surface. mTLS-gated on the prod stack. plain HTTP locks down on a 404 there.
     Ledger-->>SDK: ReplayCorpus (corpus + historical_verdicts + total_in_window + sampled flag)
-    SDK-->>Wardenctl: ReplayCorpus
+    SDK-->>Clavenarctl: ReplayCorpus
 
     alt corpus empty (no traffic in window)
-        Wardenctl-->>Operator: stdout "no inputs to replay". exit Ok.
+        Clavenarctl-->>Operator: stdout "no inputs to replay". exit Ok.
     end
 
-    Wardenctl-->>Wardenctl: build EvaluateBatchRequest{candidate_rego, candidate_name, mode: Add, inputs: corpus.inputs, historical_verdicts}
+    Clavenarctl-->>Clavenarctl: build EvaluateBatchRequest{candidate_rego, candidate_name, mode: Add, inputs: corpus.inputs, historical_verdicts}
 
-    Wardenctl->>SDK: PoliciesClient::new(policy_url)
-    Wardenctl->>SDK: evaluate_batch(&req)
+    Clavenarctl->>SDK: PoliciesClient::new(policy_url)
+    Clavenarctl->>SDK: evaluate_batch(&req)
     SDK->>Policy: POST /policies/evaluate-batch
     Policy-->>Policy: rebuild before-engine + after-engine from active set. evaluate_one per input.
 
     alt 200 OK
         Policy-->>SDK: EvaluateBatchResponse (per-input diff, tile counts)
-        SDK-->>Wardenctl: EvaluateBatchResponse
+        SDK-->>Clavenarctl: EvaluateBatchResponse
 
-        Wardenctl-->>Wardenctl: also run the chaos catalog through the candidate. count catalog regressions.
+        Clavenarctl-->>Clavenarctl: also run the chaos catalog through the candidate. count catalog regressions.
 
         alt --json
-            Wardenctl-->>Operator: stdout JSON envelope with per-result captured_at appended
+            Clavenarctl-->>Operator: stdout JSON envelope with per-result captured_at appended
         else TTY
-            Wardenctl-->>Operator: human summary (tile counts + top-N drill list)
+            Clavenarctl-->>Operator: human summary (tile counts + top-N drill list)
         end
 
         alt --fail-on-regression AND catalog_regressions > 0
-            Wardenctl-->>Operator: exit Validation (2)
+            Clavenarctl-->>Operator: exit Validation (2)
         else
-            Wardenctl-->>Operator: exit Ok
+            Clavenarctl-->>Operator: exit Ok
         end
     else 400 (candidate compile error)
         Policy-->>SDK: 400 EvaluateBatchError JSON
-        SDK-->>Wardenctl: WardenError::Server status=400
-        Wardenctl->>Lift: parse_batch_error(body)
+        SDK-->>Clavenarctl: ClavenarError::Server status=400
+        Clavenarctl->>Lift: parse_batch_error(body)
         alt Some(EvaluateBatchError)
-            Lift-->>Wardenctl: typed error with line + column
-            Wardenctl-->>Operator: stderr "candidate compile failed at L: C — <message>". exit Validation.
+            Lift-->>Clavenarctl: typed error with line + column
+            Clavenarctl-->>Operator: stderr "candidate compile failed at L: C — <message>". exit Validation.
         else None
-            Lift-->>Wardenctl: None (unrecognised envelope)
-            Wardenctl-->>Operator: stderr raw body. exit Server.
+            Lift-->>Clavenarctl: None (unrecognised envelope)
+            Clavenarctl-->>Operator: stderr raw body. exit Server.
         end
     else other
-        Wardenctl-->>Operator: ExitCode::from_warden_error mapping
+        Clavenarctl-->>Operator: ExitCode::from_clavenar_error mapping
     end
 ```
 
@@ -333,8 +333,8 @@ sequenceDiagram
 - The corpus pull and the batch evaluation hit **two distinct
   services**. The CLI takes both URLs as separate flags
   (`--ledger-url`, `--policy-url`) and the SDK builds two distinct
-  clients — there is no implicit "warden URL". Defaults come from
-  `WARDEN_LEDGER_URL` and `WARDEN_POLICY_URL` env, then
+  clients — there is no implicit "clavenar URL". Defaults come from
+  `CLAVENAR_LEDGER_URL` and `CLAVENAR_POLICY_URL` env, then
   `localhost`.
 - `/audit/replay/corpus` is **operator-only** on the prod stack
   (mTLS-gated on the ledger's internal listener). Without
@@ -342,14 +342,14 @@ sequenceDiagram
   back to plain HTTP and gets a 404 from the public listener,
   which the Caddyfile leaves off the proxied path.
 - The chaos catalog half is wired through a path-dep on
-  `warden-console`'s `warden-chaos-catalog`. The CLI implements a
+  `clavenar-console`'s `clavenar-chaos-catalog`. The CLI implements a
   minimal catalog wrapper inline so the binary stays light; the
   catalog itself is the same 40-attack corpus the console renders.
 - `--fail-on-regression` exits 2 (Validation), not 5 (Server) —
   a regression is "your candidate is wrong," not "the platform
   failed." CI matrices keying off exit codes can treat regression
   failures the same as parse failures.
-- `wardenctl policy learn` (Self-Learn miner) is a sibling
+- `clavenarctl policy learn` (Self-Learn miner) is a sibling
   subcommand with the same dual-client shape. The miner adds an
   optional Brain enrichment step and an `--accept <id>` /
   `--accept-all-safe` flow that POSTs the candidate as an
@@ -358,7 +358,7 @@ sequenceDiagram
 
 ---
 
-## 5. `wardenctl mcp-bridge` — stdio MCP shim
+## 5. `clavenarctl mcp-bridge` — stdio MCP shim
 
 Real MCP clients (Claude Code, Cursor, Cline, Continue, Codex,
 generic stdio) register stdio binaries via `mcp add`. The proxy
@@ -370,47 +370,47 @@ client cert.
 sequenceDiagram
     autonumber
     participant MCPClient as MCP client (Claude Code / Cursor / ...)
-    participant Wardenctl as mcp-bridge handler
+    participant Clavenarctl as mcp-bridge handler
     participant Reqwest
     participant Proxy
 
-    MCPClient->>Wardenctl: spawn process. open stdin/stdout pipes.
-    Note over Wardenctl: handler logs client-hint to stderr for diagnostics. No behavioural divergence today.
+    MCPClient->>Clavenarctl: spawn process. open stdin/stdout pipes.
+    Note over Clavenarctl: handler logs client-hint to stderr for diagnostics. No behavioural divergence today.
 
-    Wardenctl-->>Wardenctl: build reqwest Client. load cert + key + ca PEMs. set timeout. --insecure flag skips server verify (dev only).
-    Wardenctl-->>Wardenctl: parse --url + join /mcp
+    Clavenarctl-->>Clavenarctl: build reqwest Client. load cert + key + ca PEMs. set timeout. --insecure flag skips server verify (dev only).
+    Clavenarctl-->>Clavenarctl: parse --url + join /mcp
 
     loop until stdin closes
-        MCPClient->>Wardenctl: write NDJSON line (one JSON-RPC frame)
-        Wardenctl-->>Wardenctl: parse line as serde_json::Value
+        MCPClient->>Clavenarctl: write NDJSON line (one JSON-RPC frame)
+        Clavenarctl-->>Clavenarctl: parse line as serde_json::Value
         alt parse fails
-            Wardenctl-->>Wardenctl: log warn. drop line. continue.
+            Clavenarctl-->>Clavenarctl: log warn. drop line. continue.
         end
 
         alt JSON-RPC notification (no id field)
-            Wardenctl->>Reqwest: POST <url>/mcp with frame
+            Clavenarctl->>Reqwest: POST <url>/mcp with frame
             Reqwest->>Proxy: TLS handshake (client cert). POST /mcp.
             Proxy-->>Reqwest: response (ignored)
-            Note over Wardenctl: notifications are fire-and-forget per JSON-RPC §4.1. No response written to stdout.
+            Note over Clavenarctl: notifications are fire-and-forget per JSON-RPC §4.1. No response written to stdout.
         else JSON-RPC request (id present)
-            Wardenctl->>Reqwest: POST <url>/mcp with frame
+            Clavenarctl->>Reqwest: POST <url>/mcp with frame
             Reqwest->>Proxy: POST /mcp
             alt 200 OK
                 Proxy-->>Reqwest: upstream JSON-RPC response
-                Reqwest-->>Wardenctl: response body
-                Wardenctl->>MCPClient: write response to stdout + newline
+                Reqwest-->>Clavenarctl: response body
+                Clavenarctl->>MCPClient: write response to stdout + newline
             else 403 Veto (security pipeline rejected)
                 Proxy-->>Reqwest: 403 + body (DenyResponse JSON or plain text)
-                Reqwest-->>Wardenctl: status + body
-                Wardenctl->>MCPClient: synthesise JSON-RPC error envelope. forward to stdout. id preserved.
+                Reqwest-->>Clavenarctl: status + body
+                Clavenarctl->>MCPClient: synthesise JSON-RPC error envelope. forward to stdout. id preserved.
             else transport / timeout
-                Reqwest--xWardenctl: error
-                Wardenctl->>MCPClient: synthesise JSON-RPC error. log to stderr.
+                Reqwest--xClavenarctl: error
+                Clavenarctl->>MCPClient: synthesise JSON-RPC error. log to stderr.
             end
         end
     end
 
-    Note over MCPClient, Wardenctl: stdin EOF -> bridge process exits Ok (0). MCP client typically restarts on next request.
+    Note over MCPClient, Clavenarctl: stdin EOF -> bridge process exits Ok (0). MCP client typically restarts on next request.
 ```
 
 **Non-obvious behaviour.**
@@ -419,9 +419,9 @@ sequenceDiagram
   No SVID renewal, no session resumption, no streaming responses.
   When those become real requirements the shim promotes to its
   own repo. The current scope target is `S-MCP-01` in
-  `warden-e2e/MANUAL_TESTS.md`.
+  `clavenar-e2e/MANUAL_TESTS.md`.
 - `--insecure` skips server cert validation. Sensible only against
-  the dev stack — `warden-proxy/scripts/gen_certs.sh --env dev`
+  the dev stack — `clavenar-proxy/scripts/gen_certs.sh --env dev`
   mints `server.crt` with `CN=localhost` and no SAN, which
   rustls rejects per RFC 6125. Prod issues SVID-shaped certs
   with proper SANs; do not pass `--insecure` there.
@@ -429,7 +429,7 @@ sequenceDiagram
   The flag reserves the surface for per-client quirks (e.g. a
   client that needs a non-standard `initialize` shape) without
   re-plumbing the CLI. The hint values match
-  `warden-ctl/docs/clients/` recipe filenames so an operator
+  `clavenar-ctl/docs/clients/` recipe filenames so an operator
   can grep for their client's quirks.
 - The proxy's HIL Review path can hold a request for the full
   TTL (default 1800s). The bridge's 30s default timeout deliberately
@@ -444,7 +444,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    err["WardenError variant"] --> mapper{{"ExitCode::from_warden_error"}}
+    err["ClavenarError variant"] --> mapper{{"ExitCode::from_clavenar_error"}}
     mapper -- "Unauthorized OR Veto" --> auth["3 Auth"]
     mapper -- "BadRequest OR InvalidConfig" --> val["2 Validation"]
     mapper -- "Transport OR Decode" --> serv["5 Server"]
@@ -467,18 +467,18 @@ flowchart LR
 **Invariants.**
 
 - Every subcommand routes server errors through
-  `ExitCode::from_warden_error`. The mapping is **kind-of-error,
+  `ExitCode::from_clavenar_error`. The mapping is **kind-of-error,
   not kind-of-HTTP-status**: auth-layer (401/403) collapses to 3,
   schema-shape (400/422) collapses to 2, conflict (409) is its
   own code, everything else is 5. CI matrices grep on the exit
   code; the body is for the operator.
-- `Veto` (from `WardenClient`) maps to `Auth`. The mcp-bridge
+- `Veto` (from `ClavenarClient`) maps to `Auth`. The mcp-bridge
   does not actually return this exit code today (it forwards the
   error to the MCP client over stdout instead of failing the
   process) but the mapping is preserved for symmetry with the
   rest of the SDK surface.
-- `WardenError` is `#[non_exhaustive]`. The catch-all arm in
-  `from_warden_error` returns `Server` on unknown variants — a
+- `ClavenarError` is `#[non_exhaustive]`. The catch-all arm in
+  `from_clavenar_error` returns `Server` on unknown variants — a
   CLI must not panic on a future error variant, but it also must
   not silently exit 0.
 - Local IO failures collapse to `Validation` for path /
@@ -491,7 +491,7 @@ flowchart LR
 ## Source pointers
 
 - Top-level dispatcher + exit-code mapping: `src/main.rs` (`run`,
-  `ExitCode::from_warden_error`)
+  `ExitCode::from_clavenar_error`)
 - Auth surface: `src/cmd/auth.rs` (`login`, `logout`, `whoami`)
 - Credentials file: `src/credentials.rs` (`load`, `save`,
   `bearer_for`, `unverified_decode`, `credentials_path`)
@@ -501,7 +501,7 @@ flowchart LR
   `suspend`, `unsuspend`, `decommission`, `envelope`, `transfer`,
   `description`)
 - IaC pattern: `src/cmd/agents.rs::create` (`--if-absent` branch
-  via `warden_sdk::create_request_matches`)
+  via `clavenar_sdk::create_request_matches`)
 - Bulk migration: `src/cmd/migrate.rs`
 - Policy Lab + Self-Learn: `src/cmd/policy_lab.rs` (`Test`,
   `Learn` subcommands; `--accept`, `--accept-all-safe`,

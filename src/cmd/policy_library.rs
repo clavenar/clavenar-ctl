@@ -1,4 +1,4 @@
-//! `wardenctl policy library {list,install}` — engine-talking CLI
+//! `clavenarctl policy library {list,install}` — engine-talking CLI
 //! over the `/policies/templates*` surface.
 //!
 //! Counterpart to the console's `/policies/library` page. List filters
@@ -8,11 +8,11 @@
 //! the resulting [`MutationResponse`].
 //!
 //! Default `--policy-url` resolution mirrors the existing
-//! `policy test` / `policy learn` subcommands: flag → `WARDEN_POLICY_URL`
+//! `policy test` / `policy learn` subcommands: flag → `CLAVENAR_POLICY_URL`
 //! env → `http://localhost:8082`.
 
 use clap::{Args, Subcommand};
-use warden_sdk::{InstallTemplateRequest, PoliciesClient, PolicyTemplate, WardenError};
+use clavenar_sdk::{InstallTemplateRequest, PoliciesClient, PolicyTemplate, ClavenarError};
 
 use crate::ExitCode;
 
@@ -72,12 +72,12 @@ pub(crate) struct LibraryInstallArgs {
     /// Why this install is happening. Persisted on the ledger row.
     #[arg(long)]
     pub reason: String,
-    /// Actor sub claim. Defaults to `wardenctl` to match the existing
+    /// Actor sub claim. Defaults to `clavenarctl` to match the existing
     /// CLI write paths; override for a CI-attributable identity.
-    #[arg(long = "actor-sub", default_value = "wardenctl")]
+    #[arg(long = "actor-sub", default_value = "clavenarctl")]
     pub actor_sub: String,
-    /// Actor identity-provider id. Defaults to `wardenctl`.
-    #[arg(long = "actor-idp", default_value = "wardenctl")]
+    /// Actor identity-provider id. Defaults to `clavenarctl`.
+    #[arg(long = "actor-idp", default_value = "clavenarctl")]
     pub actor_idp: String,
     /// Override the policy-engine URL.
     #[arg(long)]
@@ -108,7 +108,7 @@ async fn list(args: LibraryListArgs) -> ExitCode {
         Ok(t) => t,
         Err(e) => {
             eprintln!("error: list templates: {}", e);
-            return ExitCode::from_warden_error(&e);
+            return ExitCode::from_clavenar_error(&e);
         }
     };
     let filters = LibraryFilters {
@@ -164,17 +164,17 @@ async fn install(args: LibraryInstallArgs) -> ExitCode {
             );
             ExitCode::Ok
         }
-        Err(WardenError::Server { status, body }) if status.as_u16() == 404 => {
+        Err(ClavenarError::Server { status, body }) if status.as_u16() == 404 => {
             eprintln!("error: template {:?} not found on engine: {}", args.name, body);
             ExitCode::Validation
         }
-        Err(WardenError::Server { status, body }) if status.as_u16() == 409 => {
+        Err(ClavenarError::Server { status, body }) if status.as_u16() == 409 => {
             eprintln!("error: template {:?} already installed: {}", args.name, body);
             ExitCode::Conflict
         }
         Err(e) => {
             eprintln!("error: install {}: {}", args.name, e);
-            ExitCode::from_warden_error(&e)
+            ExitCode::from_clavenar_error(&e)
         }
     }
 }
@@ -258,7 +258,7 @@ fn resolve_policy_url(flag: Option<&str>) -> String {
     if let Some(s) = flag {
         return s.to_string();
     }
-    if let Ok(env) = std::env::var("WARDEN_POLICY_URL") {
+    if let Ok(env) = std::env::var("CLAVENAR_POLICY_URL") {
         return env;
     }
     "http://localhost:8082".to_string()

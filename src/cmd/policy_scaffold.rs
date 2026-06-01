@@ -1,13 +1,13 @@
-//! `wardenctl policy scaffold` — emit a fresh starter Rego template
+//! `clavenarctl policy scaffold` — emit a fresh starter Rego template
 //! with frontmatter pre-filled.
 //!
 //! Pure filesystem work, no policy-engine call. The output is a
 //! syntactically-valid `.rego` file that compiles cleanly against
-//! the warden.authz package; operators tighten the gated tool set
+//! the clavenar.authz package; operators tighten the gated tool set
 //! and rule body in-place before installing.
 //!
 //! Frontmatter shape matches the seeder's parser in
-//! `warden-policy-engine/src/frontmatter.rs` — Domain / Severity /
+//! `clavenar-policy-engine/src/frontmatter.rs` — Domain / Severity /
 //! Frameworks / Tags / Tier / Tool surface / Summary, all keyed off
 //! the same column-aligned header convention the bundled templates
 //! use.
@@ -134,7 +134,7 @@ fn render_template(args: &ScaffoldArgs, tools: &[String]) -> String {
     out.push_str("# Edit:         The named tool set below is the load-bearing knob — tighten\n");
     out.push_str("#               the list to match the tools your agent stack exposes.\n");
     out.push('\n');
-    out.push_str("package warden.authz\n\n");
+    out.push_str("package clavenar.authz\n\n");
     out.push_str("import rego.v1\n\n");
 
     // Single shared tool set keeps the starter compact. The
