@@ -9,6 +9,7 @@
 //!     --from <RFC3339> --to <RFC3339>
 //!     [--readme path/to/file.md]
 //!     [--include-exports]
+//!     [--include-compliance]
 //!     [--ledger-url <URL>]
 //!     --output bundle.tar.gz
 //! ```
@@ -71,6 +72,12 @@ pub(crate) struct ExportArgs {
     /// window into `manifest.parquet_pointers`.
     #[arg(long)]
     pub include_exports: bool,
+
+    /// When set, the ledger embeds an auto-derived EU AI Act Article
+    /// 14/15 + SOC 2 / ISO 27001 `compliance_register.json` and widens
+    /// `article_scope` to cover Articles 14 + 15 (manifest schema v4).
+    #[arg(long)]
+    pub include_compliance: bool,
 
     /// Override the ledger base URL. Falls back to
     /// `CLAVENAR_LEDGER_URL` env, then `http://localhost:8083`.
@@ -142,6 +149,7 @@ async fn export(args: ExportArgs) -> ExitCode {
     let opts = RegulatoryExportOptions {
         readme,
         include_exports: args.include_exports,
+        include_compliance: args.include_compliance,
     };
     let bytes = match client.regulatory_export(&from, &to, opts).await {
         Ok(b) => b,
@@ -226,6 +234,7 @@ mod tests {
                     assert_eq!(args.to, "2026-05-01T00:00:00Z");
                     assert!(args.readme.is_none());
                     assert!(!args.include_exports);
+                    assert!(!args.include_compliance);
                     assert_eq!(args.output, PathBuf::from("/tmp/bundle.tar.gz"));
                 }
             },
@@ -245,6 +254,7 @@ mod tests {
             "--readme",
             "/tmp/prose.md",
             "--include-exports",
+            "--include-compliance",
             "--ledger-url",
             "http://ledger.test:8083",
             "--output",
@@ -256,6 +266,7 @@ mod tests {
                 RegulatoryCommand::Export(args) => {
                     assert_eq!(args.readme, Some(PathBuf::from("/tmp/prose.md")));
                     assert!(args.include_exports);
+                    assert!(args.include_compliance);
                     assert_eq!(
                         args.ledger_url.as_deref(),
                         Some("http://ledger.test:8083"),
