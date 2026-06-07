@@ -29,14 +29,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Sibling-checkout: clavenar-ctl declares clavenar-sdk as a path dep
-      # ("../clavenar-sdk") and additionally `include_str!`s policy
+      # Sibling-checkout: clavenar-ctl declares clavenar-rust-sdk as a path dep
+      # ("../clavenar-rust-sdk") and additionally `include_str!`s policy
       # templates from `../clavenar-policy-engine/policies/templates/`
       # (see src/cmd/policy.rs). All repos sit as siblings under
       # repos/ in local dev. CI gets only one repo by default, so we
       # clone the siblings into the same relative location. Requires a
       # CLAVENAR_REPO_TOKEN secret: a fine-grained PAT with Contents:Read
-      # on clavenar/clavenar-sdk + clavenar-policy-engine.
+      # on clavenar/clavenar-rust-sdk + clavenar-policy-engine.
       # actions/checkout's `path` is restricted to inside the
       # workspace, so we use `gh repo clone` directly to land outside.
       - name: checkout siblings
@@ -44,10 +44,10 @@ jobs:
           GH_TOKEN: ${{ secrets.CLAVENAR_REPO_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::CLAVENAR_REPO_TOKEN secret not set. Create a fine-grained PAT with Contents:Read on clavenar/clavenar-sdk + clavenar-policy-engine and add it under Settings → Secrets and variables → Actions."
+            echo "::error::CLAVENAR_REPO_TOKEN secret not set. Create a fine-grained PAT with Contents:Read on clavenar/clavenar-rust-sdk + clavenar-policy-engine and add it under Settings → Secrets and variables → Actions."
             exit 1
           fi
-          gh repo clone clavenar/clavenar-sdk ../clavenar-sdk -- --depth 1
+          gh repo clone clavenar/clavenar-rust-sdk ../clavenar-rust-sdk -- --depth 1
           gh repo clone clavenar/clavenar-policy-engine ../clavenar-policy-engine -- --depth 1
 
       - uses: dtolnay/rust-toolchain@stable
@@ -71,7 +71,7 @@ jobs:
   # crates.io). The deny.toml file is synced verbatim across all 14 Rust
   # repos — edit clavenar-specs first if policy changes, then mirror into
   # every other repo. Sibling-checkout: cargo-deny runs `cargo metadata`
-  # which has to resolve the clavenar-sdk path dep, so we mirror the
+  # which has to resolve the clavenar-rust-sdk path dep, so we mirror the
   # sibling-checkout step from the `ci` job.
   supply-chain:
     name: cargo-deny + cyclonedx SBOM
@@ -91,13 +91,13 @@ jobs:
             echo "::error::CLAVENAR_REPO_TOKEN secret not set."
             exit 1
           fi
-          gh repo clone clavenar/clavenar-sdk ../clavenar-sdk -- --depth 1
+          gh repo clone clavenar/clavenar-rust-sdk ../clavenar-rust-sdk -- --depth 1
           gh repo clone clavenar/clavenar-policy-engine ../clavenar-policy-engine -- --depth 1
 
       # cargo-deny + cargo-cyclonedx are run host-side via cargo-binstall
       # rather than the dockerized EmbarkStudios action because that
       # action mounts only `/github/workspace`, which makes the
-      # `../clavenar-sdk` path-dep invisible to `cargo metadata` inside
+      # `../clavenar-rust-sdk` path-dep invisible to `cargo metadata` inside
       # the container. cargo-binstall pulls each prebuilt binary in
       # ~3s instead of building from source (~2 min). SBOM lands as
       # `<crate>.cdx.json` at the repo root; we upload it as a build
