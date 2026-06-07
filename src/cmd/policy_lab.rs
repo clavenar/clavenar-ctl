@@ -66,6 +66,13 @@ pub(crate) enum PolicyAction {
     /// a signed pack; `exchange install` verifies + backtests it against
     /// the chaos catalog before landing it in the policy-engine.
     Exchange(crate::cmd::policy_exchange::ExchangeArgs),
+    /// Install (activate) a policy by name, or every policy in a
+    /// category (`--category <domain>`). Disabled-by-default policies
+    /// become live on the next atomic engine rebuild.
+    Install(crate::cmd::policy_install::InstallArgs),
+    /// Uninstall (deactivate) a policy by name, or every policy in a
+    /// category. The protected baseline floor is left untouched.
+    Uninstall(crate::cmd::policy_install::InstallArgs),
 }
 
 #[derive(Debug, Args)]
@@ -212,6 +219,8 @@ pub(crate) async fn run(args: PolicyArgs) -> ExitCode {
         PolicyAction::Scaffold(a) => crate::cmd::policy_scaffold::run(a),
         PolicyAction::Library(a) => crate::cmd::policy_library::run(a).await,
         PolicyAction::Exchange(a) => crate::cmd::policy_exchange::run(a).await,
+        PolicyAction::Install(a) => crate::cmd::policy_install::run(a, /*activate=*/ true).await,
+        PolicyAction::Uninstall(a) => crate::cmd::policy_install::run(a, /*activate=*/ false).await,
     }
 }
 
