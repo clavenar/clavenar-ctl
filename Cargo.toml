@@ -15,8 +15,8 @@ name = "clavenarctl"
 path = "src/main.rs"
 
 [dependencies]
-# Path-dep on clavenar-rust-sdk (sibling repo, not a Cargo workspace).
-clavenar-sdk = { path = "../clavenar-rust-sdk" }
+# Path-dep on clavenar-sdk (sibling repo, not a Cargo workspace).
+clavenar-sdk = { path = "../clavenar-sdk" }
 # Pure-data attack catalog — the corpus the Policy Exchange install gate
 # backtests each candidate pack policy against. Taking the path-dep here
 # (the policy-lab catalog corpus is inlined to avoid it) is justified:
