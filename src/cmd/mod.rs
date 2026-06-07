@@ -9,6 +9,7 @@ pub(crate) mod init;
 pub(crate) mod mcp_bridge;
 pub(crate) mod migrate;
 pub(crate) mod policy;
+pub(crate) mod policy_exchange;
 pub(crate) mod policy_lab;
 pub(crate) mod policy_library;
 pub(crate) mod policy_scaffold;

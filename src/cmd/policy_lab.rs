@@ -62,6 +62,10 @@ pub(crate) enum PolicyAction {
     /// on-disk catalog (`/policies/templates*`). The console-side
     /// equivalent is the `/policies/library` page.
     Library(crate::cmd::policy_library::LibraryArgs),
+    /// Sign + install signed governance packs. `exchange sign` produces
+    /// a signed pack; `exchange install` verifies + backtests it against
+    /// the chaos catalog before landing it in the policy-engine.
+    Exchange(crate::cmd::policy_exchange::ExchangeArgs),
 }
 
 #[derive(Debug, Args)]
@@ -207,6 +211,7 @@ pub(crate) async fn run(args: PolicyArgs) -> ExitCode {
         PolicyAction::Learn(a) => run_learn(a).await,
         PolicyAction::Scaffold(a) => crate::cmd::policy_scaffold::run(a),
         PolicyAction::Library(a) => crate::cmd::policy_library::run(a).await,
+        PolicyAction::Exchange(a) => crate::cmd::policy_exchange::run(a).await,
     }
 }
 
@@ -859,7 +864,7 @@ async fn create_draft(policy: &PoliciesClient, c: &MineCandidate) -> ExitCode {
 
 /// Parse `--resolve NAME:PORT:ADDR` flags into a vector the reqwest
 /// builder can fold into `resolve_to_addrs`. Mirrors curl's syntax.
-fn parse_resolve(raw: &[String]) -> Result<Vec<(String, std::net::SocketAddr)>, String> {
+pub(crate) fn parse_resolve(raw: &[String]) -> Result<Vec<(String, std::net::SocketAddr)>, String> {
     let mut out = Vec::with_capacity(raw.len());
     for r in raw {
         // Split from the right twice — the name itself can't contain
@@ -884,7 +889,7 @@ fn parse_resolve(raw: &[String]) -> Result<Vec<(String, std::net::SocketAddr)>, 
 /// are supplied (CLI runs against plain-HTTP test envs). Any partial
 /// combo (e.g. cert without key) is rejected at the boundary so we
 /// don't silently fall back to plain HTTP in a locked-down env.
-fn build_mtls_client(
+pub(crate) fn build_mtls_client(
     cert: Option<&std::path::Path>,
     key: Option<&std::path::Path>,
     ca: Option<&std::path::Path>,
