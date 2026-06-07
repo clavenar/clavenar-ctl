@@ -17,6 +17,12 @@ path = "src/main.rs"
 [dependencies]
 # Path-dep on clavenar-sdk (sibling repo, not a Cargo workspace).
 clavenar-sdk = { path = "../clavenar-sdk" }
+# Pure-data attack catalog — the corpus the Policy Exchange install gate
+# backtests each candidate pack policy against. Taking the path-dep here
+# (the policy-lab catalog corpus is inlined to avoid it) is justified:
+# the gate needs the full Rego-decidable attack set to be a real
+# regression net.
+clavenar-chaos-catalog = { path = "../clavenar-chaos-catalog" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-std", "io-util"] }
 serde = { version = "1", features = ["derive"] }
@@ -38,6 +44,9 @@ base64 = "0.22"
 # Doctor probes `/health` on every clavenar service over HTTP/HTTPS;
 # rustls keeps the build static and avoids the system OpenSSL dep.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# SHA-256 of each .rego body for the Policy Exchange pack manifest.
+sha2 = "0.10"
+hex = "0.4"
 # Init scaffolds files; doctor + policy emit them. Tempfile is used
 # by the policy module's unit tests too.
 tempfile = "3"
