@@ -1,7 +1,7 @@
 # clavenar-ctl
 
 Operator CLI for [Clavenar](https://github.com/clavenar).
-Single artifact built on top of [`clavenar-sdk`](https://github.com/clavenar/clavenar-rust-sdk):
+Single artifact built on top of [`clavenar-sdk`](https://github.com/clavenar/clavenar-sdk):
 the SDK is the typed Rust library (also consumed by `clavenar-console` and
 external integrators), this binary is the human-facing CLI.
 
@@ -233,7 +233,7 @@ cargo clippy --all-targets -- -D warnings
 
 The crate is **not** part of a Cargo workspace — it sits next to its
 sibling repos under `claude/repos/` and depends on `clavenar-sdk` via a
-`path = "../clavenar-rust-sdk"` dep. See the parent repo layout for the
+`path = "../clavenar-sdk"` dep. See the parent repo layout for the
 multi-repo layout.
 
 ## License
