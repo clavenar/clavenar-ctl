@@ -7,6 +7,7 @@ pub(crate) mod auth;
 pub(crate) mod doctor;
 pub(crate) mod init;
 pub(crate) mod mcp_bridge;
+pub(crate) mod import_scanner;
 pub(crate) mod migrate;
 pub(crate) mod policy;
 pub(crate) mod policy_exchange;
