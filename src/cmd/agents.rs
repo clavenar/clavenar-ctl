@@ -68,6 +68,9 @@ pub(crate) enum AgentsCommand {
     /// Bulk-enroll legacy agents onto the registry (spec §7.3).
     /// The official adoption path for the `Warn` → `Enforce` flip.
     Migrate(crate::cmd::migrate::MigrateArgs),
+    /// Convert a shadow-scanner JSON report into a names file for
+    /// `migrate` — bridges discovery to enrollment.
+    ImportFromScanner(crate::cmd::import_scanner::ImportScannerArgs),
 }
 
 #[derive(Debug, Args)]
@@ -234,6 +237,7 @@ pub(crate) async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitC
         AgentsCommand::Transfer(a) => transfer(a, &cfg, &url).await,
         AgentsCommand::Description(a) => description(a, &cfg, &url).await,
         AgentsCommand::Migrate(a) => crate::cmd::migrate::run(a, &cfg, &url).await,
+        AgentsCommand::ImportFromScanner(a) => crate::cmd::import_scanner::run(a),
     }
 }
 
