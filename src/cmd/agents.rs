@@ -182,6 +182,9 @@ pub(crate) struct EnvelopeChangeArgs {
     /// New yellow-tier envelope, repeatable.
     #[arg(long = "yellow-scope")]
     pub yellow_scope: Vec<String>,
+    /// Optional rationale recorded on the chain event.
+    #[arg(long)]
+    pub reason: Option<String>,
     #[arg(long)]
     pub json: bool,
 }
@@ -480,6 +483,7 @@ async fn envelope(args: EnvelopeArgs, cfg: &config::Config, url: &str) -> ExitCo
     let env = EnvelopeRequest {
         scope_envelope: &change.scope,
         yellow_envelope: &change.yellow_scope,
+        reason: change.reason.as_deref(),
     };
     let result = if narrow {
         client.envelope_narrow(&change.id, &tenant, env).await
