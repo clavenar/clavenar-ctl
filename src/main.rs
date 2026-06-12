@@ -74,6 +74,9 @@ enum Command {
     /// Regulatory exports: produce EU-AI-Act bundles
     /// from the ledger over a time window.
     Regulatory(cmd::regulatory::RegulatoryArgs),
+    /// Continuous-assurance coverage: diff per-category detection %
+    /// between two release versions, read from on-chain assurance runs.
+    Assurance(cmd::assurance::AssuranceArgs),
     /// Stdio MCP shim — registers as an MCP server with a real client
     /// (e.g. `claude mcp add`) and brokers traffic through the clavenar
     /// proxy's mTLS `/mcp` surface. Intended for the real-agent smoke
@@ -111,6 +114,9 @@ async fn run(cli: Cli) -> ExitCode {
         // `regulatory` doesn't take an --identity-url; it talks
         // directly to the ledger (no agent-registry gate today).
         Command::Regulatory(args) => cmd::regulatory::run(args).await,
+        // `assurance` reads on-chain assurance_run rows directly from
+        // the ledger — no identity-url, same posture as `regulatory`.
+        Command::Assurance(args) => cmd::assurance::run(args).await,
         Command::McpBridge(args) => cmd::mcp_bridge::run(args).await,
     }
 }
