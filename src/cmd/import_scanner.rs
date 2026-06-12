@@ -137,10 +137,10 @@ pub(crate) fn run(args: ImportScannerArgs) -> ExitCode {
     // stable and a credential found in two places enrolls once.
     let mut names: BTreeSet<String> = BTreeSet::new();
     for agg in &report.aggregates {
-        if let Some(f) = floor {
-            if severity_rank(&agg.severity) < f {
-                continue;
-            }
+        if let Some(f) = floor
+            && severity_rank(&agg.severity) < f
+        {
+            continue;
         }
         let _ = &agg.detector; // detector is retained for future scope hints
         for loc in &agg.locations {
