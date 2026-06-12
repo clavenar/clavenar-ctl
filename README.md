@@ -69,7 +69,19 @@ clavenarctl agents envelope narrow <ID> --tenant <T> --scope <S>... --yellow-sco
 clavenarctl agents envelope widen  <ID> --tenant <T> --scope <S>... --yellow-scope <S>...
 clavenarctl agents transfer      <ID> --tenant <T> --to-team <T>
 clavenarctl agents description   <ID> --tenant <T> --text <D>
+clavenarctl agents certify       <ID> --tenant <T> --proxy-url <URL> \
+                               --cert-dir <DIR> --sdk-version <V> [--out <F>]
 ```
+
+`agents certify` drives the candidate through the pre-flight gauntlet —
+fires the chaos catalog's `agent_cert` family at the proxy as the
+candidate's own mTLS traffic (`--cert-dir` holds its
+`client.crt`/`client.key`/`ca.crt`), asserts every probe is denied at the
+boundary, then records a signed survival certificate via identity's
+`/agents/{id}/certification`. Writes `<id>.cert.json`; exits non-zero
+(writing nothing) if any probe reaches the agent. Honest scope: it proves
+the enforcement boundary held for the asserted `--sdk-version`, not that
+the agent's own code is correct.
 
 Migration:
 

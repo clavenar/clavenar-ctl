@@ -71,6 +71,9 @@ pub(crate) enum AgentsCommand {
     /// Convert a shadow-scanner JSON report into a names file for
     /// `migrate` — bridges discovery to enrollment.
     ImportFromScanner(crate::cmd::import_scanner::ImportScannerArgs),
+    /// Drive a candidate agent through the pre-flight certification
+    /// gauntlet and record a signed survival certificate.
+    Certify(crate::cmd::agents_certify::CertifyArgs),
 }
 
 #[derive(Debug, Args)]
@@ -238,6 +241,7 @@ pub(crate) async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitC
         AgentsCommand::Description(a) => description(a, &cfg, &url).await,
         AgentsCommand::Migrate(a) => crate::cmd::migrate::run(a, &cfg, &url).await,
         AgentsCommand::ImportFromScanner(a) => crate::cmd::import_scanner::run(a),
+        AgentsCommand::Certify(a) => crate::cmd::agents_certify::run(a, &cfg, &url).await,
     }
 }
 
@@ -248,7 +252,7 @@ enum LifecycleVerb {
     Decommission,
 }
 
-fn build_client(url: &str, tenant: &str) -> Result<AgentsClient, ExitCode> {
+pub(crate) fn build_client(url: &str, tenant: &str) -> Result<AgentsClient, ExitCode> {
     let creds = credentials::load().map_err(|e| {
         eprintln!("error: load credentials: {e}");
         ExitCode::Server
@@ -671,6 +675,8 @@ mod tests {
             state_changed_at: "2026-05-01T00:00:00Z".into(),
             state_changed_by: "u".into(),
             description: None,
+            certified_at_version: None,
+            certified_at: None,
         }
     }
 
