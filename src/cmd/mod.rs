@@ -3,6 +3,7 @@
 //! and a `run()` that returns the subcommand's [`crate::ExitCode`].
 
 pub(crate) mod agents;
+pub(crate) mod agents_certify;
 pub(crate) mod assurance;
 pub(crate) mod auth;
 pub(crate) mod doctor;
