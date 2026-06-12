@@ -47,6 +47,18 @@ pub(crate) struct RegulatoryArgs {
 pub(crate) enum RegulatoryCommand {
     /// Build a regulatory `.tar.gz` for the time window `[from, to)`.
     Export(ExportArgs),
+    /// Re-hash the live chain via `GET /verify` and print its validity plus
+    /// any external-anchor (RFC 3161 / webhook) cross-checks. Exits non-zero
+    /// on a tamper, an unverifiable row, or an anchor mismatch.
+    Verify(VerifyArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct VerifyArgs {
+    /// Override the ledger base URL. Falls back to `CLAVENAR_LEDGER_URL`
+    /// env, then `http://localhost:8083`.
+    #[arg(long)]
+    pub ledger_url: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -96,6 +108,75 @@ pub(crate) struct ExportArgs {
 pub(crate) async fn run(args: RegulatoryArgs) -> ExitCode {
     match args.command {
         RegulatoryCommand::Export(a) => export(a).await,
+        RegulatoryCommand::Verify(a) => verify(a).await,
+    }
+}
+
+async fn verify(args: VerifyArgs) -> ExitCode {
+    let ledger_url = args
+        .ledger_url
+        .or_else(|| std::env::var("CLAVENAR_LEDGER_URL").ok())
+        .unwrap_or_else(|| "http://localhost:8083".to_string());
+
+    let client = match LedgerClient::new(&ledger_url) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: invalid ledger URL '{ledger_url}': {e}");
+            return ExitCode::Validation;
+        }
+    };
+
+    let result = match client.verify().await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: verify: {e}");
+            return ExitCode::from_clavenar_error(&e);
+        }
+    };
+
+    if result.valid {
+        println!("chain: VALID ({} entries checked)", result.entries_checked);
+    } else if let Some(seq) = result.first_invalid_seq {
+        println!("chain: INVALID — first tampered row at seq {seq}");
+    } else if let Some(v) = result.unsupported_chain_version {
+        println!("chain: UNVERIFIABLE — row tagged chain_version {v} (upgrade the verifier)");
+    } else {
+        println!("chain: INVALID");
+    }
+
+    if result.anchors.is_empty() {
+        println!("anchors: none recorded");
+    } else {
+        let mismatch = match result.anchor_mismatch {
+            Some(true) => "YES",
+            Some(false) => "no",
+            None => "n/a",
+        };
+        println!(
+            "anchors: {} recorded (mismatch={mismatch})",
+            result.anchors.len()
+        );
+        for a in &result.anchors {
+            let m = match a.chain_match {
+                Some(true) => "match",
+                Some(false) => "MISMATCH",
+                None => "pruned",
+            };
+            println!(
+                "  seq {:>8}  {:<8}  {:<8}  {:<8}  gen_time={}",
+                a.anchored_seq,
+                a.source,
+                a.status,
+                m,
+                a.gen_time.as_deref().unwrap_or("-"),
+            );
+        }
+    }
+
+    if !result.valid || result.anchor_mismatch == Some(true) {
+        ExitCode::Server
+    } else {
+        ExitCode::Ok
     }
 }
 
@@ -237,6 +318,7 @@ mod tests {
                     assert!(!args.include_compliance);
                     assert_eq!(args.output, PathBuf::from("/tmp/bundle.tar.gz"));
                 }
+                _ => panic!("expected Export"),
             },
         }
     }
@@ -272,6 +354,27 @@ mod tests {
                         Some("http://ledger.test:8083"),
                     );
                 }
+                _ => panic!("expected Export"),
+            },
+        }
+    }
+
+    #[test]
+    fn parses_verify_invocation() {
+        let cli = CliFixture::try_parse_from([
+            "clavenarctl",
+            "regulatory",
+            "verify",
+            "--ledger-url",
+            "http://ledger.test:8083",
+        ])
+        .expect("verify must parse");
+        match cli.command {
+            TopLevel::Regulatory(reg) => match reg.command {
+                RegulatoryCommand::Verify(args) => {
+                    assert_eq!(args.ledger_url.as_deref(), Some("http://ledger.test:8083"));
+                }
+                _ => panic!("expected Verify"),
             },
         }
     }
