@@ -104,6 +104,32 @@ The migration command anchors `agent.registered` chain v3 rows with
 `actor_sub = system:migration:<operator_oidc_sub>` so the chain
 records the human who ran the bulk enrollment.
 
+Onboarding funnel (discovery → enrollment):
+
+```sh
+# Greenfield: interactive first-agent wizard.
+clavenarctl agents bootstrap [--tenant <T>]
+
+# Bridge a shadow-scanner report to a names file.
+clavenarctl agents import-from-scanner report.json -o names.txt [--min-severity high]
+
+# Bridge SPIRE/workload identities to enrollment.
+clavenarctl agents import-from-workloads spire-entries.json -o names.txt
+clavenarctl agents import-from-workloads --from-identity --enroll \
+  --tenant <T> --default-owner-team legacy-fleet [--dry-run] [--json]
+```
+
+`import-from-workloads` takes a SPIRE `entry show -output json` file, a
+flat list of `spiffe://…` IDs/paths/names (`-` = stdin), or
+`--from-identity` (which pulls identity's `GET /agents/orphans` feed —
+names that minted an SVID but were never registered). Each SPIFFE id
+maps to a candidate name (clavenar `…/agent/<name>/…`, SPIRE k8s
+`…/ns/<ns>/sa/<sa>` → `<ns>-<sa>`, else the slugified last segment); a
+clavenar-shaped path naming a different tenant is skipped. Default
+writes a names file for review; `--enroll --default-owner-team <t>`
+registers the unenrolled names directly, reusing `migrate`'s idempotent
+register-if-absent engine and `system:migration:` attribution.
+
 Regulatory exports:
 
 ```sh

@@ -107,14 +107,152 @@ pub(crate) struct MigrateArgs {
 }
 
 /// Per-name outcome the CLI surfaces in its summary table / JSON.
+/// Shared with `import-from-workloads`, which drives the same
+/// register-if-absent engine ([`enroll_names`]).
 #[derive(Debug, Clone, serde::Serialize)]
-struct Outcome {
-    name: String,
-    action: &'static str,
+pub(crate) struct Outcome {
+    pub name: String,
+    pub action: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<String>,
+    pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Default `(owner_team, envelopes, kinds)` stamped on every created row
+/// by [`enroll_names`]. Borrowed so a caller passes parsed clap args
+/// without cloning.
+pub(crate) struct EnrollDefaults<'a> {
+    pub owner_team: &'a str,
+    pub scope: &'a [String],
+    pub yellow_scope: &'a [String],
+    pub attestation_kinds: &'a [String],
+}
+
+/// Build the agents client + the `system:migration:<operator_sub>`
+/// actor-sub stamp shared by every bulk-enroll path (migrate +
+/// import-from-workloads). The operator's `sub` is best-effort decoded
+/// from the cached id_token for audit attribution; the server still
+/// enforces `agents:admin` and the prefix allowlist.
+pub(crate) fn build_migration_client(
+    tenant: &str,
+    url: &str,
+) -> Result<(AgentsClient, String), ExitCode> {
+    let creds = credentials::load().map_err(|e| {
+        eprintln!("error: load credentials: {e}");
+        ExitCode::Server
+    })?;
+    let bearer = credentials::bearer_for(&creds, tenant).map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::Auth
+    })?;
+    let operator_sub = match credentials::unverified_decode(&bearer) {
+        Ok(claims) => claims.sub.unwrap_or_else(|| "unknown".to_string()),
+        Err(e) => {
+            eprintln!("warn: could not decode id_token sub claim: {e}");
+            "unknown".to_string()
+        }
+    };
+    let actor_sub = format!("{MIGRATION_ACTOR_SUB_PREFIX}{operator_sub}");
+    let client = AgentsClient::new(url)
+        .map_err(|e| {
+            eprintln!("error: invalid identity URL '{url}': {e}");
+            ExitCode::Validation
+        })?
+        .with_bearer(bearer);
+    Ok((client, actor_sub))
+}
+
+/// Register-if-absent over a list of agent names — the engine shared by
+/// `agents migrate` and `agents import-from-workloads --enroll`. For
+/// each name: `find_by_name` → create (with the migration `actor_sub`),
+/// or no-op on an envelope match, or skip-and-flag on drift. Returns the
+/// per-name outcomes plus whether any hard failure (network / 5xx)
+/// occurred so the caller can pick its exit code.
+pub(crate) async fn enroll_names(
+    client: &AgentsClient,
+    tenant: &str,
+    actor_sub: &str,
+    names: &[String],
+    defaults: &EnrollDefaults<'_>,
+    dry_run: bool,
+) -> (Vec<Outcome>, bool) {
+    let mut outcomes: Vec<Outcome> = Vec::with_capacity(names.len());
+    let mut hard_failure = false;
+
+    for name in names {
+        let existing = match client.find_by_name(tenant, name).await {
+            Ok(v) => v,
+            Err(e) => {
+                outcomes.push(Outcome {
+                    name: name.clone(),
+                    action: "failed",
+                    id: None,
+                    error: Some(format!("find: {e}")),
+                });
+                hard_failure = true;
+                continue;
+            }
+        };
+
+        let req = CreateAgentRequest {
+            tenant,
+            agent_name: name.as_str(),
+            owner_team: defaults.owner_team,
+            scope_envelope: defaults.scope.to_vec(),
+            yellow_envelope: defaults.yellow_scope.to_vec(),
+            attestation_kinds: defaults.attestation_kinds.to_vec(),
+            description: None,
+            actor_sub: Some(actor_sub),
+        };
+
+        if let Some(rec) = existing.as_ref() {
+            if create_request_matches(&req, rec) {
+                outcomes.push(Outcome {
+                    name: name.clone(),
+                    action: "matched",
+                    id: Some(rec.id.clone()),
+                    error: None,
+                });
+                continue;
+            }
+            outcomes.push(Outcome {
+                name: name.clone(),
+                action: "drift",
+                id: Some(rec.id.clone()),
+                error: Some("existing row's envelope/owner_team/kinds differ from defaults".into()),
+            });
+            continue;
+        }
+
+        if dry_run {
+            outcomes.push(Outcome {
+                name: name.clone(),
+                action: "would-create",
+                id: None,
+                error: None,
+            });
+            continue;
+        }
+        match client.create(&req).await {
+            Ok(created) => outcomes.push(Outcome {
+                name: name.clone(),
+                action: "created",
+                id: Some(created.record.id),
+                error: None,
+            }),
+            Err(e) => {
+                outcomes.push(Outcome {
+                    name: name.clone(),
+                    action: "failed",
+                    id: None,
+                    error: Some(format!("{e}")),
+                });
+                hard_failure = true;
+            }
+        }
+    }
+    (outcomes, hard_failure)
 }
 
 pub(crate) async fn run(args: MigrateArgs, cfg: &config::Config, url: &str) -> ExitCode {
@@ -135,126 +273,19 @@ pub(crate) async fn run(args: MigrateArgs, cfg: &config::Config, url: &str) -> E
         return ExitCode::Ok;
     }
 
-    let creds = match credentials::load() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("error: load credentials: {e}");
-            return ExitCode::Server;
-        }
-    };
-    let bearer = match credentials::bearer_for(&creds, &tenant) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::Auth;
-        }
+    let (client, actor_sub) = match build_migration_client(&tenant, url) {
+        Ok(v) => v,
+        Err(c) => return c,
     };
 
-    // Pull the operator's `sub` claim off the cached id_token. We need
-    // this to stamp `system:migration:<sub>` so the migration is
-    // attributable. Server is the authoritative `sub` source — this is
-    // best-effort decode for stamping only.
-    let operator_sub = match credentials::unverified_decode(&bearer) {
-        Ok(claims) => claims.sub.unwrap_or_else(|| "unknown".to_string()),
-        Err(e) => {
-            // The server-side `agents:admin` check still runs; the
-            // worst case here is the audit-row prefix says `unknown`.
-            eprintln!("warn: could not decode id_token sub claim: {e}");
-            "unknown".to_string()
-        }
+    let defaults = EnrollDefaults {
+        owner_team: &args.default_owner_team,
+        scope: &args.default_scope,
+        yellow_scope: &args.default_yellow_scope,
+        attestation_kinds: &args.default_attestation_kind,
     };
-    let actor_sub = format!("{MIGRATION_ACTOR_SUB_PREFIX}{operator_sub}");
-
-    let client = match AgentsClient::new(url) {
-        Ok(c) => c.with_bearer(bearer.clone()),
-        Err(e) => {
-            eprintln!("error: invalid identity URL '{url}': {e}");
-            return ExitCode::Validation;
-        }
-    };
-
-    let mut outcomes: Vec<Outcome> = Vec::with_capacity(names.len());
-    let mut hard_failure = false;
-
-    for name in &names {
-        // Same idempotency pattern as `agents create --if-absent`.
-        let existing = match client.find_by_name(&tenant, name).await {
-            Ok(v) => v,
-            Err(e) => {
-                outcomes.push(Outcome {
-                    name: name.clone(),
-                    action: "failed",
-                    id: None,
-                    error: Some(format!("find: {e}")),
-                });
-                hard_failure = true;
-                continue;
-            }
-        };
-
-        let req = CreateAgentRequest {
-            tenant: tenant.as_str(),
-            agent_name: name.as_str(),
-            owner_team: args.default_owner_team.as_str(),
-            scope_envelope: args.default_scope.clone(),
-            yellow_envelope: args.default_yellow_scope.clone(),
-            attestation_kinds: args.default_attestation_kind.clone(),
-            description: None,
-            actor_sub: Some(actor_sub.as_str()),
-        };
-
-        if let Some(rec) = existing.as_ref() {
-            if create_request_matches(&req, rec) {
-                outcomes.push(Outcome {
-                    name: name.clone(),
-                    action: "matched",
-                    id: Some(rec.id.clone()),
-                    error: None,
-                });
-                continue;
-            }
-            // Drift case — leave the row alone, surface the mismatch
-            // so the operator can fix it before re-running. Spec
-            // §7.3: "if it exists with a different envelope, log and
-            // skip without rewriting (operator must intervene)."
-            outcomes.push(Outcome {
-                name: name.clone(),
-                action: "drift",
-                id: Some(rec.id.clone()),
-                error: Some("existing row's envelope/owner_team/kinds differ from defaults".into()),
-            });
-            continue;
-        }
-
-        if args.dry_run {
-            outcomes.push(Outcome {
-                name: name.clone(),
-                action: "would-create",
-                id: None,
-                error: None,
-            });
-            continue;
-        }
-        match client.create(&req).await {
-            Ok(created) => {
-                outcomes.push(Outcome {
-                    name: name.clone(),
-                    action: "created",
-                    id: Some(created.record.id),
-                    error: None,
-                });
-            }
-            Err(e) => {
-                outcomes.push(Outcome {
-                    name: name.clone(),
-                    action: "failed",
-                    id: None,
-                    error: Some(format!("{e}")),
-                });
-                hard_failure = true;
-            }
-        }
-    }
+    let (outcomes, hard_failure) =
+        enroll_names(&client, &tenant, &actor_sub, &names, &defaults, args.dry_run).await;
 
     if args.json {
         match serde_json::to_string_pretty(&outcomes) {
@@ -296,8 +327,9 @@ fn read_names_file(path: &std::path::Path) -> std::io::Result<Vec<String>> {
     Ok(out)
 }
 
-/// Plain-text summary table. Columns: name, action, id, error.
-fn print_outcomes(outcomes: &[Outcome], dry_run: bool) {
+/// Plain-text summary table. Columns: name, action, id, error. Shared
+/// with `import-from-workloads`.
+pub(crate) fn print_outcomes(outcomes: &[Outcome], dry_run: bool) {
     if outcomes.is_empty() {
         println!("(no rows)");
         return;
