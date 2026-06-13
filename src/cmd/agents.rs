@@ -71,6 +71,11 @@ pub(crate) enum AgentsCommand {
     /// Convert a shadow-scanner JSON report into a names file for
     /// `migrate` — bridges discovery to enrollment.
     ImportFromScanner(crate::cmd::import_scanner::ImportScannerArgs),
+    /// Discover agents from a SPIRE/workload identity list (or identity's
+    /// own orphan-SVID feed) and write a names file or auto-enroll them.
+    ImportFromWorkloads(crate::cmd::import_workloads::ImportWorkloadsArgs),
+    /// Guided interactive wizard to register a first agent (greenfield).
+    Bootstrap(crate::cmd::bootstrap::BootstrapArgs),
     /// Drive a candidate agent through the pre-flight certification
     /// gauntlet and record a signed survival certificate.
     Certify(crate::cmd::agents_certify::CertifyArgs),
@@ -244,6 +249,10 @@ pub(crate) async fn run(args: AgentsArgs, identity_url: Option<String>) -> ExitC
         AgentsCommand::Description(a) => description(a, &cfg, &url).await,
         AgentsCommand::Migrate(a) => crate::cmd::migrate::run(a, &cfg, &url).await,
         AgentsCommand::ImportFromScanner(a) => crate::cmd::import_scanner::run(a),
+        AgentsCommand::ImportFromWorkloads(a) => {
+            crate::cmd::import_workloads::run(a, &cfg, &url).await
+        }
+        AgentsCommand::Bootstrap(a) => crate::cmd::bootstrap::run(a, &cfg, &url).await,
         AgentsCommand::Certify(a) => crate::cmd::agents_certify::run(a, &cfg, &url).await,
     }
 }
