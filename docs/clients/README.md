@@ -1,11 +1,27 @@
 # Connect an MCP client to Clavenar
 
-Every MCP client riding the Clavenar proxy reaches the `/mcp` surface
-through the same shim: `clavenarctl mcp-bridge`. The bridge speaks
-newline-delimited JSON-RPC on stdin / stdout (what every MCP client
-already drives) and forwards each frame over mTLS to the proxy.
-What differs between clients is **only the config-file shape** —
-where the client expects its `mcpServers` definition to live.
+There are two ways in, and the proxy now speaks the native MCP
+control plane (`initialize` / `tools/list` / `ping` / `notifications/*`)
+on both editions:
+
+- **Native HTTP MCP** — a client that can add a *streamable-HTTP* MCP
+  server points straight at the proxy's `/mcp` URL over mTLS. No shim:
+  the proxy IS a spec-compliant MCP server, and with
+  `CLAVENAR_PROXY_STREAMING=true` it relays an upstream's
+  `text/event-stream` responses chunk-by-chunk (with sampled,
+  detect-after-relay egress scanning).
+- **stdio bridge** — a client that only drives a *stdio* MCP server (the
+  common case for IDE plugins today) reaches `/mcp` through the
+  `clavenarctl mcp-bridge` shim. The bridge speaks newline-delimited
+  JSON-RPC on stdin / stdout and forwards each frame over mTLS. It is a
+  **buffered** leg: a streamed (SSE) upstream response is collected
+  before it reaches the stdio client, so the chunk-by-chunk relay above
+  is a native-HTTP-only property.
+
+The per-client recipes below are all the **same bridge command** — they
+differ **only in the config-file shape** (where the client expects its
+`mcpServers` definition to live). A native-HTTP client skips the bridge
+entirely and uses the proxy URL directly.
 
 | Client | Recipe | Tested on |
 |---|---|---|
