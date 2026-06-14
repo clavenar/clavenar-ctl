@@ -268,8 +268,10 @@ deciding needs the operator's own standing authority — an mTLS client
 cert in HIL's caller allowlist (`CLAVENAR_HIL_ALLOWED_CALLERS`) **plus**
 the `CLAVENAR_HIL_DECIDE_TOKEN` trusted-caller bearer (also read from the
 env var if `--decide-token` is omitted). `--as` stamps the operator into
-the audit chain (defaults to `ctl:$USER`). Without `--yes` nothing is
-decided; a link whose pending already settled exits `4` (conflict).
+the audit chain (defaults to `ctl:$USER`), and the decision is marked
+`decided_via=terminal` on the chain row so an auditor can tell a CLI
+redemption from a console or chat-card decision. Without `--yes` nothing
+is decided; a link whose pending already settled exits `4` (conflict).
 
 ## Connect an MCP client
 
