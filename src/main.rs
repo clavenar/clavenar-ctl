@@ -71,6 +71,11 @@ enum Command {
     /// Read-only access to the registered agents table. Writes
     /// land later.
     Agents(cmd::agents::AgentsArgs),
+    /// Redeem a signed decision link from the terminal:
+    /// `pending decide <token>` verifies the link against HIL and (with
+    /// `--yes`) applies the token's approve/deny action via the
+    /// trusted-caller bearer path.
+    Pending(cmd::pending::PendingArgs),
     /// Regulatory exports: produce EU-AI-Act bundles
     /// from the ledger over a time window.
     Regulatory(cmd::regulatory::RegulatoryArgs),
@@ -111,6 +116,9 @@ async fn run(cli: Cli) -> ExitCode {
         Command::Policy(args) => cmd::policy_lab::run(args).await,
         Command::Auth(args) => cmd::auth::run(args, cli.identity_url).await,
         Command::Agents(args) => cmd::agents::run(args, cli.identity_url).await,
+        // `pending` talks to HIL directly over mTLS (origin via --hil-url
+        // / CLAVENAR_HIL_URL), not the identity service.
+        Command::Pending(args) => cmd::pending::run(args).await,
         // `regulatory` doesn't take an --identity-url; it talks
         // directly to the ledger (no agent-registry gate today).
         Command::Regulatory(args) => cmd::regulatory::run(args).await,
