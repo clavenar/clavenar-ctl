@@ -123,6 +123,10 @@ struct DecideRequest {
     decided_by: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<String>,
+    /// Operator surface marker stamped onto the chain decision row. The
+    /// CLI always decides from a shell, so this is constant `terminal`;
+    /// HIL trusts it because the trusted-caller bearer is the anchor.
+    decided_via: &'static str,
 }
 
 async fn decide(args: DecideArgs) -> ExitCode {
@@ -218,6 +222,7 @@ async fn decide(args: DecideArgs) -> ExitCode {
             decision: action.clone(),
             decided_by: stamp.clone(),
             reason: args.reason.clone(),
+            decided_via: "terminal",
         })
         .send()
         .await
