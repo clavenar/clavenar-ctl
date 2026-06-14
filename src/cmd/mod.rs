@@ -13,6 +13,7 @@ pub(crate) mod mcp_bridge;
 pub(crate) mod import_scanner;
 pub(crate) mod import_workloads;
 pub(crate) mod migrate;
+pub(crate) mod pending;
 pub(crate) mod policy;
 pub(crate) mod policy_exchange;
 pub(crate) mod policy_install;
