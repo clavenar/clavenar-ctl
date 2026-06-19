@@ -30,6 +30,24 @@ pub(crate) struct ImportScannerArgs {
     /// (`critical`/`high`/`medium`/`low`). Default: all.
     #[arg(long)]
     pub min_severity: Option<String>,
+
+    /// Emit Shadow-Agent-Radar expected-silent allowlist seed entries
+    /// (JSON array of `{agent_id, reason, source}`) instead of a
+    /// `migrate` names file. Each finding location becomes an
+    /// expected-silent agent the operator applies to the ledger's
+    /// `POST /silence-allowlist`, so the silence watchdog stops
+    /// re-flagging credentials the scanner already surfaced.
+    #[arg(long)]
+    pub silence_allowlist: bool,
+}
+
+/// One expected-silent allowlist seed entry emitted in `--silence-allowlist`
+/// mode. Field shape matches the ledger's `POST /silence-allowlist` body.
+#[derive(Debug, serde::Serialize)]
+struct AllowlistSeed {
+    agent_id: String,
+    reason: String,
+    source: &'static str,
 }
 
 /// Subset of the shadow-scanner report we need. Mirrors
@@ -133,6 +151,56 @@ pub(crate) fn run(args: ImportScannerArgs) -> ExitCode {
     };
 
     let floor = args.min_severity.as_deref().map(severity_rank);
+
+    if args.silence_allowlist {
+        // BTreeMap → sorted + deduped; first finding per agent wins the
+        // reason (a credential surfaced twice seeds once).
+        let mut seeds: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        for agg in &report.aggregates {
+            if let Some(f) = floor
+                && severity_rank(&agg.severity) < f
+            {
+                continue;
+            }
+            for loc in &agg.locations {
+                seeds
+                    .entry(agent_name_from_location(&loc.location))
+                    .or_insert_with(|| format!("shadow-scanner: {} ({})", agg.detector, agg.severity));
+            }
+        }
+        if seeds.is_empty() {
+            eprintln!("no findings matched — nothing to import");
+            return ExitCode::Ok;
+        }
+        let entries: Vec<AllowlistSeed> = seeds
+            .into_iter()
+            .map(|(agent_id, reason)| AllowlistSeed { agent_id, reason, source: "shadow-scanner" })
+            .collect();
+        let json = match serde_json::to_string_pretty(&entries) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("error: serialize allowlist seeds: {e}");
+                return ExitCode::Validation;
+            }
+        };
+        match &args.out {
+            Some(path) => {
+                if let Err(e) = std::fs::write(path, &json) {
+                    eprintln!("error: write {}: {e}", path.display());
+                    return ExitCode::Validation;
+                }
+                eprintln!(
+                    "wrote {} expected-silent seed(s) to {} — apply each with: \
+                     POST /silence-allowlist on the ledger's mTLS port",
+                    entries.len(),
+                    path.display()
+                );
+            }
+            None => println!("{json}"),
+        }
+        return ExitCode::Ok;
+    }
+
     // BTreeSet → sorted + deduped, so re-running on the same report is
     // stable and a credential found in two places enrolls once.
     let mut names: BTreeSet<String> = BTreeSet::new();
@@ -191,6 +259,21 @@ mod tests {
             agent_name_from_location("slack://eng-alerts/1699999999.001"),
             "scanner-eng-alerts-1699999999-001"
         );
+    }
+
+    #[test]
+    fn allowlist_seed_matches_ledger_body_shape() {
+        // Field names must match the ledger's POST /silence-allowlist body
+        // (`agent_id`, `reason`, `source`) so the emitted seeds apply 1:1.
+        let seed = AllowlistSeed {
+            agent_id: "scanner-acme-api".to_string(),
+            reason: "shadow-scanner: aws (critical)".to_string(),
+            source: "shadow-scanner",
+        };
+        let v = serde_json::to_value(&seed).unwrap();
+        assert_eq!(v["agent_id"], "scanner-acme-api");
+        assert_eq!(v["source"], "shadow-scanner");
+        assert!(v["reason"].as_str().unwrap().contains("aws"));
     }
 
     #[test]
