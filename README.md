@@ -118,6 +118,11 @@ clavenarctl agents import-from-scanner report.json -o names.txt [--min-severity 
 # don't also trip the silence watchdog.
 clavenarctl agents import-from-scanner report.json --silence-allowlist -o seeds.json
 
+# Shadow-Agent-Radar provider audit-log correlation: diff a normalized
+# provider usage export ([{agent_id, usage_count}]) against on-chain verdict
+# counts. Present at the provider but absent/undercounted on-chain = bypass.
+clavenarctl import-provider-audit usage.json --provider aws --window-hours 24 [--json]
+
 # Bridge SPIRE/workload identities to enrollment.
 clavenarctl agents import-from-workloads spire-entries.json -o names.txt
 clavenarctl agents import-from-workloads --from-identity --enroll \
