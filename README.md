@@ -113,6 +113,11 @@ clavenarctl agents bootstrap [--tenant <T>]
 # Bridge a shadow-scanner report to a names file.
 clavenarctl agents import-from-scanner report.json -o names.txt [--min-severity high]
 
+# Or emit expected-silent allowlist seeds ({agent_id,reason,source}) to apply
+# to the ledger's POST /silence-allowlist, so scanner-surfaced credentials
+# don't also trip the silence watchdog.
+clavenarctl agents import-from-scanner report.json --silence-allowlist -o seeds.json
+
 # Bridge SPIRE/workload identities to enrollment.
 clavenarctl agents import-from-workloads spire-entries.json -o names.txt
 clavenarctl agents import-from-workloads --from-identity --enroll \
