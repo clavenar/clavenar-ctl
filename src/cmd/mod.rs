@@ -10,6 +10,7 @@ pub(crate) mod bootstrap;
 pub(crate) mod doctor;
 pub(crate) mod init;
 pub(crate) mod mcp_bridge;
+pub(crate) mod import_provider_audit;
 pub(crate) mod import_scanner;
 pub(crate) mod import_workloads;
 pub(crate) mod migrate;

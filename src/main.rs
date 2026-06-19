@@ -88,6 +88,11 @@ enum Command {
     /// flow documented in `clavenar-e2e/MANUAL_TESTS.md` (`S-MCP-01`),
     /// not a long-lived production agent runtime.
     McpBridge(cmd::mcp_bridge::McpBridgeArgs),
+    /// Shadow-Agent-Radar provider audit-log correlation: diff a
+    /// normalized provider usage export against on-chain verdict counts.
+    /// Present at the provider but absent/undercounted on-chain = proxy
+    /// bypass evidence.
+    ImportProviderAudit(cmd::import_provider_audit::ImportProviderAuditArgs),
 }
 
 #[tokio::main]
@@ -126,6 +131,9 @@ async fn run(cli: Cli) -> ExitCode {
         // the ledger — no identity-url, same posture as `regulatory`.
         Command::Assurance(args) => cmd::assurance::run(args).await,
         Command::McpBridge(args) => cmd::mcp_bridge::run(args).await,
+        // `import-provider-audit` correlates a provider usage export
+        // against the chain (public read port), no identity-url.
+        Command::ImportProviderAudit(args) => cmd::import_provider_audit::run(args).await,
     }
 }
 
