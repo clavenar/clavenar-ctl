@@ -12,7 +12,7 @@ clavenar service, ordered against the actual source: `src/main.rs`,
 | Operator | Human at the shell or a CI runner. | — |
 | Clavenarctl | The CLI process — dispatcher in `main.rs`, subcommand handler in `cmd/*.rs`. | `src/main.rs::run` |
 | Credentials | OS-correct credentials file. Linux: `~/.config/clavenar/credentials.json`. Carries one `TenantCredential` per tenant. | `src/credentials.rs` |
-| Config | `~/.clavenar/config.toml` — service URLs, default tenant, output formatting. | `src/config.rs` |
+| Config | `~/.config/clavenar/config.toml` — service URLs, default tenant, output formatting. | `src/config.rs` |
 | SDK | `clavenar-sdk` typed clients: `AgentsClient`, `LedgerClient`, `PoliciesClient`. | external |
 | Identity | `clavenar-identity` — agents lifecycle. | external |
 | Ledger | `clavenar-ledger` — `/audit/replay/corpus`, `/export/regulatory`. | external |
