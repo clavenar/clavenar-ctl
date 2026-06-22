@@ -218,7 +218,7 @@ Resolution order, highest priority first:
 
 1. Per-call `--identity-url` / `--tenant` flag.
 2. `CLAVENAR_IDENTITY_URL` / `CLAVENAR_TENANT` env vars.
-3. `~/.clavenar/config.toml`.
+3. `~/.config/clavenar/config.toml`.
 4. Built-in default for `identity_url`: `http://localhost:8086`.
    No built-in default for `--tenant` — missing fails loudly.
 
