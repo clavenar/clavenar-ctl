@@ -1,6 +1,10 @@
-//! Subcommand modules. One file per top-level verb (`auth`, `agents`,
-//! `regulatory`). Each module exports an `Args` struct (clap derive)
-//! and a `run()` that returns the subcommand's [`crate::ExitCode`].
+//! Subcommand modules. Eleven top-level verbs ship today (`init`,
+//! `doctor`, `generate-policy`, `policy`, `auth`, `agents`, `pending`,
+//! `regulatory`, `assurance`, `mcp-bridge`, `import-provider-audit`);
+//! the remaining modules here are their sub-handlers (e.g. `policy_lab`
+//! and `policy_install` behind `policy`). Each module exports an `Args`
+//! struct (clap derive) and a `run()` that returns the subcommand's
+//! [`crate::ExitCode`].
 
 pub(crate) mod agents;
 pub(crate) mod agents_certify;
