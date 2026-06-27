@@ -6,8 +6,10 @@
 //! `clavenarctl` subcommand calls into a `clavenar-sdk` client.
 //!
 //! Top-level surface — see `README.md` for the full subcommand listing
-//! and `clavenarctl <verb> --help` for flag-level docs. The three verbs
-//! today are `auth`, `agents`, and `regulatory`.
+//! and `clavenarctl <verb> --help` for flag-level docs. Eleven verbs
+//! ship today: `init`, `doctor`, `generate-policy`, `policy`, `auth`,
+//! `agents`, `pending`, `regulatory`, `assurance`, `mcp-bridge`, and
+//! `import-provider-audit`.
 //!
 //! Device-authorization-grant flow (RFC 8628) is *not* yet shipped — it
 //! lands later with the dex mock where the e2e runner wires a real

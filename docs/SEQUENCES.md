@@ -18,6 +18,7 @@ clavenar service, ordered against the actual source: `src/main.rs`,
 | Ledger | `clavenar-ledger` — `/audit/replay/corpus`, `/export/regulatory`. | external |
 | Policy | `clavenar-policy-engine` — `/policies/evaluate-batch`, `/policies/mine`. | external |
 | Proxy | `clavenar-proxy` mTLS `/mcp` — the mcp-bridge target. | external |
+| HIL | `clavenar-hil` — `/decision-link/verify`, `/decide/{id}` over mTLS; the `pending decide` target. | external |
 | MCPClient | Real MCP client (Claude Code, Cursor, Cline, Continue, Codex, generic) — talks to clavenarctl over stdio. | external |
 | ExitMap | `ExitCode::from_clavenar_error` — spec §9.3 mapping. | `src/main.rs::ExitCode` |
 
@@ -202,7 +203,7 @@ sequenceDiagram
     alt --if-absent AND row exists
         SDK-->>Clavenarctl: Some(AgentRecord)
         Clavenarctl->>Match: create_request_matches(&req, &record)
-        Note over Match: pure-function diff against the on-disk request shape. Compares scope_envelope, yellow_envelope, attestation_kinds, owner_team, description.
+        Note over Match: pure-function diff against the on-disk request shape. Compares tenant, agent_name, owner_team, scope_envelope, yellow_envelope, attestation_kinds — description deliberately excluded.
         alt matches every field
             Match-->>Clavenarctl: true
             Clavenarctl-->>Operator: stdout "agent already registered (no-op)" exit Ok (0).
@@ -281,14 +282,14 @@ sequenceDiagram
     Clavenarctl->>SDK: replay_corpus(ReplayCorpusParams{since, limit, agent_id, tool_type})
     SDK->>Ledger: GET /audit/replay/corpus?since=..&limit=..
     Note over Ledger: operator-only surface. mTLS-gated on the prod stack. plain HTTP locks down on a 404 there.
-    Ledger-->>SDK: ReplayCorpus (corpus + historical_verdicts + total_in_window + sampled flag)
+    Ledger-->>SDK: ReplayCorpus (corpus + total_in_window + returned + sampled flag)
     SDK-->>Clavenarctl: ReplayCorpus
 
     alt corpus empty (no traffic in window)
         Clavenarctl-->>Operator: stdout "no inputs to replay". exit Ok.
     end
 
-    Clavenarctl-->>Clavenarctl: build EvaluateBatchRequest{candidate_rego, candidate_name, mode: Add, inputs: corpus.inputs, historical_verdicts}
+    Clavenarctl-->>Clavenarctl: build EvaluateBatchRequest{candidate_rego, candidate_name, mode, replace_rule_name, inputs: corpus.inputs}
 
     Clavenarctl->>SDK: PoliciesClient::new(policy_url)
     Clavenarctl->>SDK: evaluate_batch(&req)
@@ -399,13 +400,13 @@ sequenceDiagram
                 Proxy-->>Reqwest: upstream JSON-RPC response
                 Reqwest-->>Clavenarctl: response body
                 Clavenarctl->>MCPClient: write response to stdout + newline
-            else 403 Veto (security pipeline rejected)
-                Proxy-->>Reqwest: 403 + body (DenyResponse JSON or plain text)
+            else non-2xx (e.g. 403 Veto — security pipeline rejected)
+                Proxy-->>Reqwest: non-2xx status + body (DenyResponse JSON or plain text)
                 Reqwest-->>Clavenarctl: status + body
-                Clavenarctl->>MCPClient: synthesise JSON-RPC error envelope. forward to stdout. id preserved.
+                Clavenarctl->>MCPClient: synthesise JSON-RPC error envelope (code -32000, data = body). forward to stdout. id preserved.
             else transport / timeout
                 Reqwest--xClavenarctl: error
-                Clavenarctl->>MCPClient: synthesise JSON-RPC error. log to stderr.
+                Note over Clavenarctl: log to stderr + continue. No JSON-RPC error reaches stdout — a transport failure isn't a structured deny.
             end
         end
     end
@@ -437,6 +438,108 @@ sequenceDiagram
   should not hold the MCP client's stdin hostage indefinitely.
   Bump `--timeout-secs` only when the operator is co-located
   with an approver.
+
+---
+
+## 6. `clavenarctl pending decide` — signed decision-link redemption
+
+A channel-carried decision link (Slack / Teams / PagerDuty / webhook /
+SMTP card, or one minted via `GET /pending/{id}/decision-link`) redeemed
+one-shot from the terminal. The token is a *pointer + action claim*,
+never a bearer credential: deciding still needs the operator's own
+standing authority — an mTLS client cert in HIL's caller allowlist
+(`CLAVENAR_HIL_ALLOWED_CALLERS`) **plus** the trusted-caller bearer
+(`CLAVENAR_HIL_DECIDE_TOKEN`). A leaked link alone decides nothing, and
+the action is signature-bound so an `approve` link can't be replayed as
+a `deny`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Operator
+    participant Clavenarctl as decide handler
+    participant Reqwest as mTLS client
+    participant HIL
+
+    Operator->>Clavenarctl: clavenarctl pending decide <token> --cert .. --key .. --ca .. [--yes]
+
+    alt --hil-url / CLAVENAR_HIL_URL unset
+        Clavenarctl--xOperator: stderr error. exit Validation (2).
+    end
+
+    Clavenarctl-->>Clavenarctl: build_client — cert + key + ca PEMs, timeout. --insecure skips server verify (dev only).
+    alt cert/key/ca read or PEM-parse fails
+        Clavenarctl--xOperator: stderr. exit Validation.
+    end
+
+    Note over Clavenarctl,HIL: Step 1 — verify (ungated). No decide bearer needed yet.
+    Clavenarctl->>Reqwest: POST <hil>/decision-link/verify {token}
+    Reqwest->>HIL: TLS handshake (client cert). POST.
+
+    alt transport error
+        Reqwest--xClavenarctl: error
+        Clavenarctl--xOperator: stderr. exit Server (5).
+    else non-2xx
+        HIL-->>Clavenarctl: status
+        Clavenarctl--xOperator: exit_for_status — 401/403 Auth, 404/400/422 Validation, 409 Conflict, else Server.
+    else 200 OK
+        HIL-->>Clavenarctl: VerifyResponse{valid, reason, pending_id, action, pending}
+        alt valid == false
+            Clavenarctl--xOperator: explain_invalid(reason). expired/invalid/gone -> Validation; not_pending -> Conflict.
+        else valid, missing pending_id / action
+            Clavenarctl--xOperator: stderr. exit Server.
+        else valid
+            Clavenarctl-->>Operator: print_pending (agent, method, status, correlation, risk)
+        end
+    end
+
+    alt no --yes
+        Clavenarctl-->>Operator: stdout "dry run — re-run with --yes". exit Ok (0). Nothing decided.
+    else --yes
+        alt --decide-token / CLAVENAR_HIL_DECIDE_TOKEN unset
+            Clavenarctl--xOperator: stderr. exit Auth (3).
+        end
+        Clavenarctl-->>Clavenarctl: resolve_stamp — --as, else ctl:$USER, else clavenarctl
+        Clavenarctl->>Reqwest: POST <hil>/decide/{pending_id} (bearer decide_token, x-clavenar-decided-by: stamp) {decision: action, decided_by, reason?, decided_via: "terminal"}
+        Reqwest->>HIL: POST
+        alt transport error
+            Reqwest--xClavenarctl: error
+            Clavenarctl--xOperator: stderr. exit Server.
+        else 200 OK
+            HIL-->>Clavenarctl: settled — decided_via=terminal stamped on the chain row
+            Clavenarctl-->>Operator: stdout "<action>d pending <id> as <stamp>". exit Ok.
+        else non-2xx (409 already settled, 401/403 caller not allowed, ...)
+            HIL-->>Clavenarctl: status + body
+            Clavenarctl--xOperator: exit_for_status — 409 -> Conflict.
+        end
+    end
+```
+
+**Non-obvious behaviour.**
+
+- The token is a **pointer + action claim, not a bearer.** The verify
+  step (`POST /decision-link/verify`) is ungated and only confirms the
+  signature, expiry, and that the pending is still actionable. The
+  actual decide (`POST /decide/{id}`) rides HIL's trusted-caller path:
+  an allowlisted mTLS client cert **and** the `CLAVENAR_HIL_DECIDE_TOKEN`
+  bearer. A copied link can be previewed by anyone who can reach HIL,
+  but only a standing operator can apply it.
+- **Dry run by default.** Without `--yes` the command verifies and prints
+  the pending, then exits Ok having decided nothing — the safe default
+  for a mutating one-shot. `--yes` is the explicit apply gate.
+- The action is **signature-bound** — `approve` / `deny` is baked into
+  the signed token, so a redeemer can't flip an `approve` link into a
+  `deny`. The CLI forwards `decision: action` verbatim from the verified
+  token, never from a flag.
+- Every applied decision stamps `decided_via: "terminal"` in the body
+  and the `x-clavenar-decided-by` header (the `--as` stamp, else
+  `ctl:$USER`, else `clavenarctl`), so the audit chain distinguishes a
+  terminal redemption from a console / channel one.
+- A **409 on the decide call** means the pending already settled (raced
+  by another approver, or expired) — mapped to `Conflict` (4) via
+  `exit_for_status`, the same code `explain_invalid`'s `not_pending`
+  reason yields on the verify step. Re-redeeming a spent link loses
+  loudly rather than double-deciding.
 
 ---
 
@@ -513,4 +616,7 @@ flowchart LR
   fan-out with `--only-configured` skip)
 - MCP bridge: `src/cmd/mcp_bridge.rs` (`build_client`, NDJSON
   loop, notification vs request branching)
+- Pending decide (signed decision-link redemption):
+  `src/cmd/pending.rs` (`decide`, `build_client`, `resolve_stamp`,
+  `explain_invalid`, `exit_for_status`)
 - Client recipes: `docs/clients/*.md`
