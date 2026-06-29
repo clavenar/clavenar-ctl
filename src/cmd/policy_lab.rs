@@ -293,6 +293,9 @@ async fn run_test(args: TestArgs) -> ExitCode {
                 agent_id: args.agent_id.clone(),
                 tool_type: args.tool_type.clone(),
                 limit: args.limit,
+                // Operator CLI sees the deployment-wide corpus; demo
+                // prefix scoping is a console concern, not clavenarctl's.
+                tenant_prefix: None,
             })
             .await
         {
@@ -674,6 +677,7 @@ async fn run_learn(args: LearnArgs) -> ExitCode {
             agent_id: args.agent_id.clone(),
             tool_type: args.tool_type.clone(),
             limit: args.limit,
+            tenant_prefix: None,
         })
         .await
     {
