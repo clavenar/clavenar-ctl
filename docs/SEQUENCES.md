@@ -279,9 +279,10 @@ sequenceDiagram
     Clavenarctl-->>Clavenarctl: parse --since (Nh / Nd / ISO duration). default 7d.
 
     Clavenarctl->>SDK: LedgerClient::new(ledger_url). optional with_http_client (mTLS Identity).
-    Clavenarctl->>SDK: replay_corpus(ReplayCorpusParams{since, limit, agent_id, tool_type})
-    SDK->>Ledger: GET /audit/replay/corpus?since=..&limit=..
+    Clavenarctl->>SDK: replay_corpus(ReplayCorpusParams{since, limit, agent_id, tool_type, tenant_prefix})
+    SDK->>Ledger: GET /audit/replay/corpus?since=..&limit=..[&tenant_prefix=..]
     Note over Ledger: operator-only surface. mTLS-gated on the prod stack. plain HTTP locks down on a 404 there.
+    Note over SDK,Ledger: tenant_prefix (optional) scopes the corpus to one demo-session prefix; None = deployment-wide.
     Ledger-->>SDK: ReplayCorpus (corpus + total_in_window + returned + sampled flag)
     SDK-->>Clavenarctl: ReplayCorpus
 
