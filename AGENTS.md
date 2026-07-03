@@ -6,19 +6,27 @@ The crate/repo is `clavenar-ctl`; the shipped binary is `clavenarctl`
 the SDK is the typed library, this is the human-facing CLI.
 
 ## Build, test, lint
-- Build: `cargo build` (release: `cargo build --release`).
-  Host caveat: this repo's `target/` may be root-owned from prior docker
-  builds — build on the host with `CARGO_TARGET_DIR=/tmp/clavenar-ctl-target`.
-- Test: `cargo test` (integration tests spawn the binary via `assert_cmd`).
-- Lint: `cargo clippy --all-targets -- -D warnings` (the floor — no `#[allow]`
-  to silence). Supply-chain gate: `cargo deny check all` + `cargo cyclonedx`
-  (SBOM), run host-side.
-- Sibling path-deps: this crate is **not** in a Cargo workspace. It depends
-  on `../clavenar-sdk` and `../clavenar-chaos-catalog` by path, and
-  `include_str!`s Rego templates from
-  `../clavenar-policy-engine/policies/templates/`. CI clones those siblings
-  into the same relative location via the `CLAVENAR_REPO_TOKEN` secret
-  before building.
+
+```bash
+cargo build                                # release: cargo build --release
+cargo test                                 # integration tests spawn the binary via assert_cmd
+cargo clippy --all-targets -- -D warnings  # the floor — no #[allow] to silence
+cargo deny check all                       # supply-chain gate, run host-side
+cargo cyclonedx --format json --describe crate   # SBOM
+```
+
+Host caveat: this repo's `target/` may be root-owned from prior docker
+builds — build on the host with `CARGO_TARGET_DIR=/tmp/clavenar-ctl-target`.
+
+Sibling path-deps: this crate is **not** in a Cargo workspace. It depends
+on `../clavenar-sdk` and `../clavenar-chaos-catalog` by path, `include_str!`s
+Rego templates from `../clavenar-policy-engine/policies/templates/`
+(the `generate-policy` starter pack), and `include_str!`s
+`../clavenar-lite/policies/governance.rego` (the `init --guard` starter
+policy) — all four siblings must be present to build. CI clones only
+`clavenar-sdk` and `clavenar-policy-engine` into the same relative location
+via the `CLAVENAR_REPO_TOKEN` secret; chaos-catalog and lite are not cloned
+(known CI gap) — clone all four when reproducing CI locally.
 
 Run: `clavenarctl <verb>` (e.g. `clavenarctl doctor`, `clavenarctl agents list
 --tenant <T>`). No listener — it's a client; it talks to identity (`:8086`),
@@ -29,11 +37,16 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
 - `src/main.rs` — entrypoint. `Cli` / `Command` clap-derive tree, global
   `--identity-url`, and the `ExitCode` mapping.
 - `src/cmd/` — one module per verb, each exporting an `Args` struct + `run()`
-  returning `ExitCode`. Top-level verbs: `auth`, `agents`, `regulatory`,
-  `doctor`, `init`, `generate-policy` (`policy`), `pending`, `mcp-bridge`.
-  Supporting modules: `import_scanner`, `import_workloads`,
-  `import_provider_audit`, `migrate`, `bootstrap`, `agents_certify`,
-  `assurance`, and the `policy_*` Exchange/library/lab/scaffold helpers.
+  returning `ExitCode`. Top-level verbs (11): `init`, `doctor`,
+  `generate-policy` (template emitter, `policy.rs`), `policy` (Policy Lab,
+  `policy_lab.rs`), `auth`, `agents`, `pending`, `regulatory`, `assurance`,
+  `mcp-bridge`, `import-provider-audit`. Supporting modules:
+  `import_scanner`, `import_workloads`, `migrate`, `bootstrap`,
+  `agents_certify`, and the `policy_*` Exchange/install/library/lab/scaffold
+  helpers. `agents` = full lifecycle read+write
+  (create/suspend/unsuspend/decommission/envelope/transfer/description) +
+  bulk import (`migrate`, `import-from-scanner|workloads`, `bootstrap`) +
+  `certify`.
 - `src/config.rs` — `config.toml` parse + flag→env→file→default resolution.
 - `src/credentials.rs` — per-tenant OIDC `id_token` cache.
 - `tests/cli_integration.rs` — `assert_cmd` exit-code / stdout contract.
@@ -72,18 +85,21 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
   reaches the candidate; it proves the enforcement boundary held for the
   asserted `--sdk-version`, not that agent code is correct.
 
-Rust house rules (the ones that bite here):
+Rust house rules:
 - clippy `-D warnings` is the floor; fix the code, don't `#[allow]` (only for
   a documented false positive, with the reason in the attribute). This crate
   also sets `unreachable_pub = "warn"` — keep visibility tight; use
-  `pub(crate)` for module-internal items.
+  `pub(crate)` for module-internal items. One standing exception:
+  `policy_lab.rs` carries an un-reasoned `#[allow(dead_code)]` stub that
+  keeps its `BTreeMap` import used — remove stub, allow, and import
+  together or not at all.
 - A type in a `pub` fn signature must itself be `pub` (`private_interfaces`).
 - Tests at file bottom in `#[cfg(test)] mod tests` (after all other items).
 - `writeln!` over `write!(…, "…\n")`; prefer let-chains over nested `if let`.
 - Doc comments: no `+ ` line-start continuations (clippy reads them as
   misindented list items).
-- `deny.toml` is synced verbatim across the Rust family — edit the public
-  source repo first, then mirror; don't drift it locally.
+- `deny.toml` is synced verbatim from `clavenar-specs` — edit it there
+  first, then mirror the exact bytes.
 
 ## Pointers
 README.md · SECURITY.md · docs/SEQUENCES.md · docs/clients/
