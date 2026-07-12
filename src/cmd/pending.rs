@@ -18,14 +18,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Subcommand};
+use clavenar_sdk::ClavenarError;
+use clavenar_sdk::hil::{Decision, DecisionLinkPending, HilClient, HilDecideCredential};
 use reqwest::{Certificate, Client, Identity};
-use serde::{Deserialize, Serialize};
 
 use crate::ExitCode;
-
-/// The HIL header that stamps `decided_by` on the trusted-caller bearer
-/// path (mirrors `clavenar_hil::auth::DECIDED_BY_HEADER`).
-const DECIDED_BY_HEADER: &str = "x-clavenar-decided-by";
 
 #[derive(Debug, Args)]
 pub(crate) struct PendingArgs {
@@ -94,41 +91,6 @@ pub(crate) async fn run(args: PendingArgs) -> ExitCode {
     }
 }
 
-#[derive(Serialize)]
-struct VerifyRequest<'a> {
-    token: &'a str,
-}
-
-#[derive(Deserialize)]
-struct VerifyResponse {
-    valid: bool,
-    reason: String,
-    pending_id: Option<String>,
-    action: Option<String>,
-    pending: Option<PendingSummary>,
-}
-
-#[derive(Deserialize)]
-struct PendingSummary {
-    agent_id: String,
-    method: String,
-    risk_summary: String,
-    status: String,
-    correlation_id: String,
-}
-
-#[derive(Serialize)]
-struct DecideRequest {
-    decision: String,
-    decided_by: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reason: Option<String>,
-    /// Operator surface marker stamped onto the chain decision row. The
-    /// CLI always decides from a shell, so this is constant `terminal`;
-    /// HIL trusts it because the trusted-caller bearer is the anchor.
-    decided_via: &'static str,
-}
-
 async fn decide(args: DecideArgs) -> ExitCode {
     let Some(hil_url) = args
         .hil_url
@@ -143,37 +105,31 @@ async fn decide(args: DecideArgs) -> ExitCode {
         return ExitCode::Validation;
     };
 
-    let client = match build_client(&args).await {
+    let http = match build_client(&args).await {
         Ok(c) => c,
         Err(e) => {
             eprintln!("error: build mTLS client: {e}");
             return ExitCode::Validation;
         }
     };
+    let hil = match HilClient::new(&hil_url) {
+        Ok(c) => c.with_http_client(http),
+        Err(e) => {
+            eprintln!("error: HIL URL {hil_url}: {e}");
+            return ExitCode::Validation;
+        }
+    };
 
     // Step 1 — verify (ungated). Confirms the signature, expiry, and that
     // the target is still actionable before we touch the decide path.
-    let verify_url = join_url(&hil_url, "decision-link/verify");
-    let resp = match client
-        .post(&verify_url)
-        .json(&VerifyRequest { token: &args.token })
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("error: reach HIL at {verify_url}: {e}");
-            return ExitCode::Server;
-        }
-    };
-    if !resp.status().is_success() {
-        eprintln!("error: token verify returned HTTP {}", resp.status());
-        return exit_for_status(resp.status().as_u16());
-    }
-    let verify: VerifyResponse = match resp.json().await {
+    let verify = match hil.verify_decision_link(&args.token).await {
         Ok(v) => v,
+        Err(ClavenarError::Server { status, .. }) => {
+            eprintln!("error: token verify returned HTTP {status}");
+            return exit_for_status(status.as_u16());
+        }
         Err(e) => {
-            eprintln!("error: decode verify response: {e}");
+            eprintln!("error: verify token against {hil_url}: {e}");
             return ExitCode::Server;
         }
     };
@@ -184,13 +140,12 @@ async fn decide(args: DecideArgs) -> ExitCode {
         return code;
     }
 
-    let (Some(pending_id), Some(action)) = (verify.pending_id.clone(), verify.action.clone())
-    else {
+    let (Some(pending_id), Some(action)) = (verify.pending_id, verify.action.clone()) else {
         eprintln!("error: HIL reported a valid link without a pending id / action");
         return ExitCode::Server;
     };
 
-    print_pending(&pending_id, &action, verify.pending.as_ref());
+    print_pending(&pending_id.to_string(), &action, verify.pending.as_ref());
 
     // Step 2 — apply, only on explicit --yes. The dry run above is the
     // safe default for a mutating one-shot.
@@ -198,6 +153,17 @@ async fn decide(args: DecideArgs) -> ExitCode {
         println!("\ndry run — re-run with --yes to {action} this pending.");
         return ExitCode::Ok;
     }
+
+    // The action claim is signature-bound to approve/deny; anything else
+    // is a HIL contract drift we refuse to apply.
+    let decision = match action.as_str() {
+        "approve" => Decision::Approve,
+        "deny" => Decision::Deny,
+        other => {
+            eprintln!("error: unsupported decision-link action {other:?}");
+            return ExitCode::Validation;
+        }
+    };
 
     let Some(decide_token) = args
         .decide_token
@@ -213,35 +179,38 @@ async fn decide(args: DecideArgs) -> ExitCode {
     };
     let stamp = resolve_stamp(args.decided_by.as_deref());
 
-    let decide_url = join_url(&hil_url, &format!("decide/{pending_id}"));
-    let resp = match client
-        .post(&decide_url)
-        .bearer_auth(&decide_token)
-        .header(DECIDED_BY_HEADER, &stamp)
-        .json(&DecideRequest {
-            decision: action.clone(),
-            decided_by: stamp.clone(),
-            reason: args.reason.clone(),
-            decided_via: "terminal",
-        })
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("error: reach HIL at {decide_url}: {e}");
-            return ExitCode::Server;
+    // `decided_via` is constant `terminal`: the CLI always decides from a
+    // shell, and HIL trusts the marker because the trusted-caller bearer
+    // is the anchor.
+    let result = hil
+        .decide(
+            pending_id,
+            decision,
+            &stamp,
+            args.reason.clone(),
+            None,
+            None,
+            Some(HilDecideCredential::Bearer {
+                token: &decide_token,
+                decided_by: &stamp,
+            }),
+            Some("terminal"),
+        )
+        .await;
+    match result {
+        Ok(_) => {
+            println!("{action}d pending {pending_id} as {stamp}.");
+            ExitCode::Ok
         }
-    };
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        eprintln!("error: decide returned HTTP {status}: {}", body.trim());
-        return exit_for_status(status.as_u16());
+        Err(ClavenarError::Server { status, body }) => {
+            eprintln!("error: decide returned HTTP {status}: {}", body.trim());
+            exit_for_status(status.as_u16())
+        }
+        Err(e) => {
+            eprintln!("error: decide against {hil_url}: {e}");
+            ExitCode::Server
+        }
     }
-
-    println!("{action}d pending {pending_id} as {stamp}.");
-    ExitCode::Ok
 }
 
 async fn build_client(args: &DecideArgs) -> anyhow::Result<Client> {
@@ -264,7 +233,7 @@ async fn build_client(args: &DecideArgs) -> anyhow::Result<Client> {
     Ok(builder.build()?)
 }
 
-fn print_pending(pending_id: &str, action: &str, summary: Option<&PendingSummary>) {
+fn print_pending(pending_id: &str, action: &str, summary: Option<&DecisionLinkPending>) {
     println!("pending {pending_id}");
     println!("  action:      {action}");
     if let Some(s) = summary {
@@ -274,12 +243,6 @@ fn print_pending(pending_id: &str, action: &str, summary: Option<&PendingSummary
         println!("  correlation: {}", s.correlation_id);
         println!("  risk:        {}", s.risk_summary);
     }
-}
-
-/// Append `path` to a base origin, tolerating a trailing slash on the
-/// base so `https://hil:8084/` and `https://hil:8084` both work.
-fn join_url(base: &str, path: &str) -> String {
-    format!("{}/{}", base.trim_end_matches('/'), path)
 }
 
 /// `decided_by` stamp: the `--as` override, else `ctl:$USER`, else a
@@ -299,7 +262,10 @@ fn resolve_stamp(as_arg: Option<&str>) -> String {
 /// `not_pending` means the row already settled (Conflict).
 fn explain_invalid(reason: &str) -> (&'static str, ExitCode) {
     match reason {
-        "expired" => ("the link has expired — ask for a fresh one", ExitCode::Validation),
+        "expired" => (
+            "the link has expired — ask for a fresh one",
+            ExitCode::Validation,
+        ),
         "invalid" => ("the token signature is invalid", ExitCode::Validation),
         "not_pending" => (
             "the pending has already been decided or expired",
@@ -322,18 +288,6 @@ fn exit_for_status(status: u16) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn join_url_tolerates_trailing_slash() {
-        assert_eq!(
-            join_url("https://hil:8084", "decision-link/verify"),
-            "https://hil:8084/decision-link/verify"
-        );
-        assert_eq!(
-            join_url("https://hil:8084/", "decide/abc"),
-            "https://hil:8084/decide/abc"
-        );
-    }
 
     #[test]
     fn resolve_stamp_prefers_explicit_as() {
