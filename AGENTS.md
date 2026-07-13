@@ -100,6 +100,7 @@ Rust house rules:
   misindented list items).
 - `deny.toml` is synced verbatim from `clavenar-specs` — edit it there
   first, then mirror the exact bytes.
+- Commit subjects must start with a lowercase letter.
 
 ## Pointers
 README.md · SECURITY.md · docs/SEQUENCES.md · docs/clients/
