@@ -55,6 +55,7 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
 - `deny.toml` — supply-chain policy (advisories / licenses / bans / sources).
 
 ## Conventions & invariants
+- After adding or updating a feature, also update the relevant `MANUAL_TESTS*` file(s) when needed.
 - **Exit codes are a wire contract** (spec §9.3), deterministic and
   machine-checkable: `0` success · `2` validation (bad args, 400/404/422) ·
   `3` auth/capability (401/403) · `4` conflict (409, already-in-desired-state) ·
