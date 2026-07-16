@@ -30,6 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Run before sibling assembly so this repository owns every fmt failure.
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
       # Manifest assembler vendored byte-for-byte from clavenar-e2e commit
       # 206bdb608d377bbdfdffddc4060469e296dba721. It derives Cargo path deps
       # and literal Rust include_str!/include_bytes! sibling inputs.
@@ -52,13 +60,6 @@ jobs:
           path: assembly-receipt.json
           if-no-files-found: error
           retention-days: 90
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check
 
       - uses: Swatinem/rust-cache@v2
 
