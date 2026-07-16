@@ -77,6 +77,24 @@ def _run(
     return result
 
 
+def _authenticated_git_command(*arguments: str) -> tuple[str, ...]:
+    """Build a Git command that delegates HTTPS credentials to gh.
+
+    The empty helper clears any runner-global helper first. The gh helper reads
+    GH_TOKEN from the command environment, so credentials are neither embedded
+    in process arguments nor persisted in repository or global Git config.
+    """
+
+    return (
+        "git",
+        "-c",
+        "credential.helper=",
+        "-c",
+        "credential.helper=!gh auth git-credential",
+        *arguments,
+    )
+
+
 def _resolved(path: Path) -> Path:
     return path.expanduser().resolve(strict=False)
 
@@ -470,7 +488,9 @@ def clone_repository(
             env=environment,
         )
         _run(
-            ("git", "-C", str(staging), "fetch", "--depth", "1", "origin", ref),
+            _authenticated_git_command(
+                "-C", str(staging), "fetch", "--depth", "1", "origin", ref
+            ),
             env=environment,
         )
         _run(
