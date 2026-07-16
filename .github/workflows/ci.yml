@@ -45,6 +45,14 @@ jobs:
           python3 .github/scripts/assemble_repositories.py checkout \
             --root "$GITHUB_WORKSPACE" --ref main > assembly-receipt.json
 
+      - name: upload repository assembly receipt
+        uses: actions/upload-artifact@v5
+        with:
+          name: repository-assembly-${{ github.job }}-${{ github.sha }}
+          path: assembly-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -59,14 +67,6 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --all-targets -- -D warnings
-
-      - name: upload repository assembly receipt
-        uses: actions/upload-artifact@v5
-        with:
-          name: repository-assembly-${{ github.job }}-${{ github.sha }}
-          path: assembly-receipt.json
-          if-no-files-found: error
-          retention-days: 90
 
   # Supply-chain gate. cargo-deny runs four checks against `deny.toml` at
   # the repo root: advisories (RUSTSEC vulns + unmaintained), licenses
@@ -97,6 +97,14 @@ jobs:
           python3 .github/scripts/assemble_repositories.py checkout \
             --root "$GITHUB_WORKSPACE" --ref main > assembly-receipt.json
 
+      - name: upload repository assembly receipt
+        uses: actions/upload-artifact@v5
+        with:
+          name: repository-assembly-${{ github.job }}-${{ github.sha }}
+          path: assembly-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
       # cargo-deny + cargo-cyclonedx are run host-side via cargo-binstall
       # rather than the dockerized EmbarkStudios action because that
       # action mounts only `/github/workspace`, which makes the
@@ -124,13 +132,5 @@ jobs:
         with:
           name: sbom-${{ github.event.repository.name }}-${{ github.sha }}
           path: '*.cdx.json'
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: upload repository assembly receipt
-        uses: actions/upload-artifact@v5
-        with:
-          name: repository-assembly-${{ github.job }}-${{ github.sha }}
-          path: assembly-receipt.json
           if-no-files-found: error
           retention-days: 90
