@@ -67,7 +67,15 @@ fn top_level_help_lists_every_subcommand() {
         .assert()
         .success();
     let stdout = std::str::from_utf8(&assert.get_output().stdout).unwrap();
-    for sub in ["init", "doctor", "generate-policy", "auth", "agents", "regulatory", "assurance"] {
+    for sub in [
+        "init",
+        "doctor",
+        "generate-policy",
+        "auth",
+        "agents",
+        "regulatory",
+        "assurance",
+    ] {
         assert!(
             stdout.contains(sub),
             "--help missing subcommand `{sub}`:\n{stdout}"

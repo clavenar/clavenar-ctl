@@ -16,8 +16,8 @@
 use clap::{Args, Subcommand};
 use std::io::Read;
 
-use crate::credentials::{self, TenantCredential};
 use crate::ExitCode;
+use crate::credentials::{self, TenantCredential};
 
 #[derive(Debug, Args)]
 pub(crate) struct AuthArgs {

@@ -97,7 +97,11 @@ pub(crate) fn correlate(
                 provider_count,
                 chain_count,
                 delta: provider_count - chain_count,
-                kind: if chain_count == 0 { "no_chain" } else { "undercount" },
+                kind: if chain_count == 0 {
+                    "no_chain"
+                } else {
+                    "undercount"
+                },
             })
         })
         .collect();
@@ -134,7 +138,9 @@ pub(crate) async fn run(args: ImportProviderAuditArgs) -> ExitCode {
     let usage: Vec<ProviderUsage> = match serde_json::from_str(&raw) {
         Ok(u) => u,
         Err(e) => {
-            eprintln!("error: not a normalized provider export (expected [{{agent_id, usage_count}}]): {e}");
+            eprintln!(
+                "error: not a normalized provider export (expected [{{agent_id, usage_count}}]): {e}"
+            );
             return ExitCode::Validation;
         }
     };

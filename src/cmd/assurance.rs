@@ -198,7 +198,11 @@ fn render_table(r: &DiffReport) -> String {
         r.to_run_at.as_deref().unwrap_or("-")
     );
     let _ = writeln!(out);
-    let _ = writeln!(out, "  {:<16}{:>8}{:>8}{:>8}", "category", "from", "to", "Δ");
+    let _ = writeln!(
+        out,
+        "  {:<16}{:>8}{:>8}{:>8}",
+        "category", "from", "to", "Δ"
+    );
     for c in &r.categories {
         let fp = c.from_pct.map(pct).unwrap_or_else(|| "—".to_string());
         let tp = c.to_pct.map(pct).unwrap_or_else(|| "—".to_string());
@@ -210,7 +214,10 @@ fn render_table(r: &DiffReport) -> String {
         let _ = writeln!(out, "  {:<16}{fp:>8}{tp:>8}{d:>8}{flag}", c.key);
     }
     if r.any_regression {
-        let _ = writeln!(out, "\n  result: REGRESSION — a category detects less than the baseline");
+        let _ = writeln!(
+            out,
+            "\n  result: REGRESSION — a category detects less than the baseline"
+        );
     } else {
         let _ = writeln!(out, "\n  result: no regression");
     }
@@ -343,7 +350,11 @@ mod tests {
             run_fixture(20, "1.21.0", &[("denylist", 1.0), ("supply_chain", 1.0)]),
         ];
         let r = compute_diff(&runs, "a", "1.20.0", "1.21.0").unwrap();
-        let sc = r.categories.iter().find(|c| c.key == "supply_chain").unwrap();
+        let sc = r
+            .categories
+            .iter()
+            .find(|c| c.key == "supply_chain")
+            .unwrap();
         assert_eq!(sc.from_pct, None);
         assert_eq!(sc.delta, None);
         assert!(!sc.regressed);

@@ -16,16 +16,15 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use crate::config::{config_path, Config};
 use crate::ExitCode;
+use crate::config::{Config, config_path};
 
 /// Complete starter policy the `--guard` flow drops into `./policies/` so
 /// the local `clavenar-lite` boots with a valid ruleset. Sourced verbatim
 /// from the lite edition's shipped `governance.rego` — a single
 /// self-contained `package clavenar.authz` (loading the per-domain
 /// templates flat would risk regorus rule-name conflicts).
-const GUARD_GOVERNANCE_REGO: &str =
-    include_str!("../../../clavenar-lite/policies/governance.rego");
+const GUARD_GOVERNANCE_REGO: &str = include_str!("../../../clavenar-lite/policies/governance.rego");
 
 #[derive(Debug, Args)]
 pub(crate) struct InitArgs {
@@ -250,7 +249,11 @@ pub(crate) async fn run(args: InitArgs) -> ExitCode {
             }
             written += 1;
         }
-        eprintln!("wrote {} template(s) under {}/", written, templates_dir.display());
+        eprintln!(
+            "wrote {} template(s) under {}/",
+            written,
+            templates_dir.display()
+        );
     }
 
     if args.guard {

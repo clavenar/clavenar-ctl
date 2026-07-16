@@ -199,10 +199,7 @@ pub(crate) async fn run(args: McpBridgeArgs) -> ExitCode {
     }
 }
 
-async fn write_line(
-    stdout: &mut tokio::io::Stdout,
-    line: &str,
-) -> std::io::Result<()> {
+async fn write_line(stdout: &mut tokio::io::Stdout, line: &str) -> std::io::Result<()> {
     stdout.write_all(line.as_bytes()).await?;
     stdout.write_all(b"\n").await?;
     stdout.flush().await

@@ -29,9 +29,9 @@ use std::path::PathBuf;
 use chrono::{DateTime, Duration as CDuration, Utc};
 use clap::{Args, Subcommand};
 use clavenar_sdk::{
-    parse_batch_error, parse_mine_error, BatchMode, BatchVerdict, CreatePolicyRequest, DiffClass,
-    EvaluateBatchRequest, EvaluateBatchResponse, LedgerClient, MineCandidate, MineRequest,
-    MineResponse, PoliciesClient, ReplayCorpusParams, ClavenarError,
+    BatchMode, BatchVerdict, ClavenarError, CreatePolicyRequest, DiffClass, EvaluateBatchRequest,
+    EvaluateBatchResponse, LedgerClient, MineCandidate, MineRequest, MineResponse, PoliciesClient,
+    ReplayCorpusParams, parse_batch_error, parse_mine_error,
 };
 
 use crate::ExitCode;
@@ -307,8 +307,7 @@ async fn run_test(args: TestArgs) -> ExitCode {
         };
         prod_window_total = corpus.total_in_window;
         prod_window_returned = corpus.returned;
-        let inputs: Vec<serde_json::Value> =
-            corpus.corpus.into_iter().map(|e| e.input).collect();
+        let inputs: Vec<serde_json::Value> = corpus.corpus.into_iter().map(|e| e.input).collect();
         if inputs.is_empty() {
             // No replayable rows yet — print and move on. Catalog tab
             // still runs.
@@ -354,10 +353,7 @@ async fn run_test(args: TestArgs) -> ExitCode {
                     .results
                     .iter()
                     .filter(|row| {
-                        matches!(
-                            row.diff,
-                            DiffClass::DenyToAllow | DiffClass::YellowToAllow
-                        )
+                        matches!(row.diff, DiffClass::DenyToAllow | DiffClass::YellowToAllow)
                     })
                     .count();
                 catalog_resp = Some(r);
@@ -457,10 +453,7 @@ fn print_human(
     }
     if let Some(c) = catalog {
         let counts = count_diffs(c);
-        println!(
-            "Chaos catalog ({} attacks)",
-            c.results.len()
-        );
+        println!("Chaos catalog ({} attacks)", c.results.len());
         print_tile("Allow → Deny    ", counts.allow_to_deny);
         print_tile("Deny  → Allow (regression) ", counts.deny_to_allow);
         print_tile("unchanged       ", counts.unchanged);
@@ -560,9 +553,8 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
     // attestation flips it to Allow (the canonical regression demo).
     {
         let mut e = base("delete_repo", 0.05);
-        e["agent_spiffe"] = serde_json::json!(
-            "spiffe://clavenar.local/tenant/acme/agent/del/instance/x"
-        );
+        e["agent_spiffe"] =
+            serde_json::json!("spiffe://clavenar.local/tenant/acme/agent/del/instance/x");
         v.push(e);
     }
     // PHI export with 250-patient batch — modeled on the
@@ -571,9 +563,8 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
     // patient_count > 100 surfaces in the after-reasons.
     {
         let mut e = base("phi_export", 0.05);
-        e["agent_spiffe"] = serde_json::json!(
-            "spiffe://clavenar.local/tenant/acme/agent/clinical/instance/1"
-        );
+        e["agent_spiffe"] =
+            serde_json::json!("spiffe://clavenar.local/tenant/acme/agent/clinical/instance/1");
         e["arguments"] = serde_json::json!({
             "patient_count": 250,
             "fields": ["mrn", "dob", "dx_code"],
@@ -709,11 +700,7 @@ async fn run_learn(args: LearnArgs) -> ExitCode {
         return ExitCode::Ok;
     }
 
-    let inputs: Vec<serde_json::Value> = corpus
-        .corpus
-        .iter()
-        .map(|e| e.input.clone())
-        .collect();
+    let inputs: Vec<serde_json::Value> = corpus.corpus.iter().map(|e| e.input.clone()).collect();
     // Historical verdicts come back from the ledger as opaque JSON;
     // the miner only needs `allow` to bucket into Allow tier, but pass
     // the reason vectors through too so the wire shape matches a
@@ -767,7 +754,10 @@ async fn run_learn(args: LearnArgs) -> ExitCode {
 fn render_learn_summary(resp: &MineResponse, corpus_returned: i64, window: &str) {
     println!(
         "Mining {} corpus rows (last {}) — {} candidate(s) in {} ms",
-        corpus_returned, window, resp.candidates.len(), resp.evaluated_in_ms
+        corpus_returned,
+        window,
+        resp.candidates.len(),
+        resp.evaluated_in_ms
     );
     if resp.candidates_dropped > 0 {
         println!(
@@ -777,7 +767,11 @@ fn render_learn_summary(resp: &MineResponse, corpus_returned: i64, window: &str)
     }
     println!();
     for (idx, c) in resp.candidates.iter().enumerate() {
-        let badge = if c.brain_enriched { "brain" } else { "template" };
+        let badge = if c.brain_enriched {
+            "brain"
+        } else {
+            "template"
+        };
         println!(
             "[{}] {:<36} score {:.1}  ({})",
             idx + 1,
@@ -796,18 +790,18 @@ fn render_learn_summary(resp: &MineResponse, corpus_returned: i64, window: &str)
             lr.allow_to_yellow,
             lr.allow_to_deny,
             lr.deny_to_yellow,
-            if lr.catalog_regressions == 0 { "✓" } else { "✗" }
+            if lr.catalog_regressions == 0 {
+                "✓"
+            } else {
+                "✗"
+            }
         );
         println!();
     }
     println!("To land a candidate:  clavenarctl policy learn --accept <id>");
 }
 
-async fn accept_candidate(
-    policy: &PoliciesClient,
-    resp: &MineResponse,
-    target: &str,
-) -> ExitCode {
+async fn accept_candidate(policy: &PoliciesClient, resp: &MineResponse, target: &str) -> ExitCode {
     // Match against rule_name OR ephemeral id. Rule_name is the
     // stable surface — ids regenerate per mine run, so a script that
     // pipes `--json | jq .id` into `--accept` only works if both
@@ -838,7 +832,11 @@ async fn accept_all_safe(policy: &PoliciesClient, resp: &MineResponse) -> ExitCo
         match create_draft(policy, c).await {
             ExitCode::Ok => accepted += 1,
             other => {
-                eprintln!("error: failed to land {}: exit {}", c.rule_name, other.code());
+                eprintln!(
+                    "error: failed to land {}: exit {}",
+                    c.rule_name,
+                    other.code()
+                );
                 last_err = Some(other);
             }
         }
@@ -915,8 +913,8 @@ pub(crate) fn build_mtls_client(
                 .map_err(|e| format!("read client cert {}: {}", cert.display(), e))?;
             let key_pem = std::fs::read(key)
                 .map_err(|e| format!("read client key {}: {}", key.display(), e))?;
-            let ca_pem = std::fs::read(ca)
-                .map_err(|e| format!("read ca cert {}: {}", ca.display(), e))?;
+            let ca_pem =
+                std::fs::read(ca).map_err(|e| format!("read ca cert {}: {}", ca.display(), e))?;
             let mut combined = cert_pem.clone();
             if !combined.ends_with(b"\n") {
                 combined.push(b'\n');
@@ -939,8 +937,7 @@ pub(crate) fn build_mtls_client(
             Ok(Some(client))
         }
         _ => Err(
-            "--client-cert, --client-key, and --ca-cert must all be supplied together"
-                .to_string(),
+            "--client-cert, --client-key, and --ca-cert must all be supplied together".to_string(),
         ),
     }
 }

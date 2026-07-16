@@ -20,9 +20,9 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Subcommand};
 use clavenar_chaos_catalog::catalog_policy_inputs;
 use clavenar_sdk::{
-    BatchMode, CreatePolicyRequest, DiffClass, EvaluateBatchRequest, PackEntry, PackManifest,
-    PackSignatureRef, PackSigner, PackVerifyOutcome, PoliciesClient, VerifyingKey,
-    PACK_MANIFEST_FILENAME, PACK_MANIFEST_SCHEMA_VERSION, PACK_SIGNATURE_SIDECAR, verify_pack,
+    BatchMode, CreatePolicyRequest, DiffClass, EvaluateBatchRequest, PACK_MANIFEST_FILENAME,
+    PACK_MANIFEST_SCHEMA_VERSION, PACK_SIGNATURE_SIDECAR, PackEntry, PackManifest,
+    PackSignatureRef, PackSigner, PackVerifyOutcome, PoliciesClient, VerifyingKey, verify_pack,
     verifying_key_from_jwks, verifying_key_from_pem,
 };
 use sha2::{Digest, Sha256};
@@ -119,7 +119,8 @@ fn read_pack_dir(dir: &Path) -> Result<(Vec<PackEntry>, Vec<String>), String> {
     let mut entries = Vec::with_capacity(files.len());
     let mut bodies = Vec::with_capacity(files.len());
     for path in files {
-        let body = std::fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+        let body =
+            std::fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -429,7 +430,10 @@ async fn install(args: InstallArgs) -> ExitCode {
 
 /// Policy name from a `.rego` filename (`money_moves.rego` → `money_moves`).
 fn policy_name(filename: &str) -> String {
-    filename.strip_suffix(".rego").unwrap_or(filename).to_string()
+    filename
+        .strip_suffix(".rego")
+        .unwrap_or(filename)
+        .to_string()
 }
 
 /// Resolve the Ed25519 verifying key: a pinned SPKI PEM if `--pubkey`,

@@ -8,9 +8,9 @@
 //! manual copy. Each distinct finding location becomes a slugified
 //! agent name; the operator reviews the file, then runs `migrate`.
 
+use crate::ExitCode;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use crate::ExitCode;
 
 use clap::Args;
 use serde::Deserialize;
@@ -98,7 +98,13 @@ fn agent_name_from_location(location: &str) -> String {
         .unwrap_or(head);
     let slug: String = head
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect();
     let slug = slug.trim_matches('-').to_string();
     // Collapse runs of '-'.
@@ -155,7 +161,8 @@ pub(crate) fn run(args: ImportScannerArgs) -> ExitCode {
     if args.silence_allowlist {
         // BTreeMap → sorted + deduped; first finding per agent wins the
         // reason (a credential surfaced twice seeds once).
-        let mut seeds: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        let mut seeds: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
         for agg in &report.aggregates {
             if let Some(f) = floor
                 && severity_rank(&agg.severity) < f
@@ -165,7 +172,9 @@ pub(crate) fn run(args: ImportScannerArgs) -> ExitCode {
             for loc in &agg.locations {
                 seeds
                     .entry(agent_name_from_location(&loc.location))
-                    .or_insert_with(|| format!("shadow-scanner: {} ({})", agg.detector, agg.severity));
+                    .or_insert_with(|| {
+                        format!("shadow-scanner: {} ({})", agg.detector, agg.severity)
+                    });
             }
         }
         if seeds.is_empty() {
@@ -174,7 +183,11 @@ pub(crate) fn run(args: ImportScannerArgs) -> ExitCode {
         }
         let entries: Vec<AllowlistSeed> = seeds
             .into_iter()
-            .map(|(agent_id, reason)| AllowlistSeed { agent_id, reason, source: "shadow-scanner" })
+            .map(|(agent_id, reason)| AllowlistSeed {
+                agent_id,
+                reason,
+                source: "shadow-scanner",
+            })
             .collect();
         let json = match serde_json::to_string_pretty(&entries) {
             Ok(s) => s,

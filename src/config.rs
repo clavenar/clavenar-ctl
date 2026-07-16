@@ -55,10 +55,9 @@ pub(crate) fn load() -> Result<Config> {
     if !path.exists() {
         return Ok(Config::default());
     }
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let cfg: Config = toml::from_str(&body)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let body =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let cfg: Config = toml::from_str(&body).with_context(|| format!("parse {}", path.display()))?;
     Ok(cfg)
 }
 
@@ -179,7 +178,10 @@ mod tests {
             default_tenant = "acme"
         "#;
         let cfg: Config = toml::from_str(s).unwrap();
-        assert_eq!(cfg.identity_url.as_deref(), Some("http://identity.test:8086"));
+        assert_eq!(
+            cfg.identity_url.as_deref(),
+            Some("http://identity.test:8086")
+        );
         assert_eq!(cfg.default_tenant.as_deref(), Some("acme"));
     }
 }

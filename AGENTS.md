@@ -54,6 +54,9 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
 - `deny.toml` — supply-chain policy (advisories / licenses / bans / sources).
 
 ## Conventions & invariants
+
+- **Formatting is an owning-CI gate.** Run `cargo fmt --all -- --check`
+  before pushing Rust changes; CI runs it before check, test, and clippy.
 - After adding or updating a feature, also update the relevant `MANUAL_TESTS*` file(s) when needed.
 - **Exit codes are a wire contract** (spec §9.3), deterministic and
   machine-checkable: `0` success · `2` validation (bad args, 400/404/422) ·

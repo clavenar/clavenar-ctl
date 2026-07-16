@@ -20,9 +20,9 @@ use std::path::PathBuf;
 use clap::Args;
 use serde::Deserialize;
 
-use crate::cmd::migrate::{build_migration_client, enroll_names, print_outcomes, EnrollDefaults};
-use crate::config;
 use crate::ExitCode;
+use crate::cmd::migrate::{EnrollDefaults, build_migration_client, enroll_names, print_outcomes};
+use crate::config;
 
 #[derive(Debug, Args)]
 pub(crate) struct ImportWorkloadsArgs {
@@ -110,15 +110,16 @@ pub(crate) async fn run(args: ImportWorkloadsArgs, cfg: &config::Config, url: &s
     };
 
     let names: Vec<String> = if args.from_identity {
-        let (client, _) = client_actor.as_ref().expect("client built when from_identity");
+        let (client, _) = client_actor
+            .as_ref()
+            .expect("client built when from_identity");
         match client.list_orphans(&tenant).await {
             Ok(orphans) => {
                 // The orphans feed is server-sorted by recency; re-sort
                 // lexicographically + dedup so both discovery sources
                 // produce the same stable, diffable order in the names
                 // file and the enrollment summary.
-                let mut names: Vec<String> =
-                    orphans.into_iter().map(|o| o.agent_name).collect();
+                let mut names: Vec<String> = orphans.into_iter().map(|o| o.agent_name).collect();
                 names.sort();
                 names.dedup();
                 names
@@ -271,7 +272,9 @@ fn path_segments(spiffe: &str) -> Vec<&str> {
 /// The value following a `key` segment, if present (`…/ns/payments/…`
 /// → `seg_after("ns") = "payments"`).
 fn seg_after<'a>(segs: &[&'a str], key: &str) -> Option<&'a str> {
-    segs.iter().position(|s| *s == key).and_then(|i| segs.get(i + 1).copied())
+    segs.iter()
+        .position(|s| *s == key)
+        .and_then(|i| segs.get(i + 1).copied())
 }
 
 /// Tenant named by a clavenar-shaped SPIFFE path (`/tenant/<t>/…`), if any.
@@ -324,7 +327,9 @@ mod tests {
     #[test]
     fn extracts_clavenar_agent_segment() {
         assert_eq!(
-            agent_name_from_spiffe("spiffe://clavenar.local/tenant/acme/agent/support-bot-3/instance/abc"),
+            agent_name_from_spiffe(
+                "spiffe://clavenar.local/tenant/acme/agent/support-bot-3/instance/abc"
+            ),
             Some("support-bot-3".to_string())
         );
     }
@@ -372,7 +377,10 @@ mod tests {
         ]}"#;
         let names = parse_workload_names(json, "acme");
         // Deduped to two distinct ns-sa pairs.
-        assert_eq!(names, vec!["api-orders".to_string(), "web-frontend".to_string()]);
+        assert_eq!(
+            names,
+            vec!["api-orders".to_string(), "web-frontend".to_string()]
+        );
     }
 
     #[test]

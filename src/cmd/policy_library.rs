@@ -12,7 +12,7 @@
 //! env → `http://localhost:8082`.
 
 use clap::{Args, Subcommand};
-use clavenar_sdk::{InstallTemplateRequest, PoliciesClient, PolicyTemplate, ClavenarError};
+use clavenar_sdk::{ClavenarError, InstallTemplateRequest, PoliciesClient, PolicyTemplate};
 
 use crate::ExitCode;
 
@@ -165,11 +165,17 @@ async fn install(args: LibraryInstallArgs) -> ExitCode {
             ExitCode::Ok
         }
         Err(ClavenarError::Server { status, body }) if status.as_u16() == 404 => {
-            eprintln!("error: template {:?} not found on engine: {}", args.name, body);
+            eprintln!(
+                "error: template {:?} not found on engine: {}",
+                args.name, body
+            );
             ExitCode::Validation
         }
         Err(ClavenarError::Server { status, body }) if status.as_u16() == 409 => {
-            eprintln!("error: template {:?} already installed: {}", args.name, body);
+            eprintln!(
+                "error: template {:?} already installed: {}",
+                args.name, body
+            );
             ExitCode::Conflict
         }
         Err(e) => {
@@ -190,10 +196,7 @@ struct LibraryFilters {
     not_installed: bool,
 }
 
-fn apply_filters(
-    templates: Vec<PolicyTemplate>,
-    filters: &LibraryFilters,
-) -> Vec<PolicyTemplate> {
+fn apply_filters(templates: Vec<PolicyTemplate>, filters: &LibraryFilters) -> Vec<PolicyTemplate> {
     templates
         .into_iter()
         .filter(|t| {
@@ -242,7 +245,11 @@ fn print_table(rows: &[PolicyTemplate]) {
         "NAME", "DOMAIN", "SEVERITY", "TIER"
     );
     for t in rows {
-        let state = if t.installed { "installed" } else { "available" };
+        let state = if t.installed {
+            "installed"
+        } else {
+            "available"
+        };
         println!(
             "{:<32} {:<14} {:<10} {:<8} {}",
             t.name,

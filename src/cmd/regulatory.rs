@@ -349,10 +349,7 @@ mod tests {
                     assert_eq!(args.readme, Some(PathBuf::from("/tmp/prose.md")));
                     assert!(args.include_exports);
                     assert!(args.include_compliance);
-                    assert_eq!(
-                        args.ledger_url.as_deref(),
-                        Some("http://ledger.test:8083"),
-                    );
+                    assert_eq!(args.ledger_url.as_deref(), Some("http://ledger.test:8083"),);
                 }
                 _ => panic!("expected Export"),
             },

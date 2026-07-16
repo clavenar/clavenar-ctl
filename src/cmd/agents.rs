@@ -31,13 +31,13 @@
 
 use clap::{Args, Subcommand};
 use clavenar_sdk::{
-    create_request_matches, AgentListFilter, AgentRecord, AgentState, AgentsClient,
-    CreateAgentRequest, EnvelopeRequest,
+    AgentListFilter, AgentRecord, AgentState, AgentsClient, CreateAgentRequest, EnvelopeRequest,
+    create_request_matches,
 };
 
+use crate::ExitCode;
 use crate::config;
 use crate::credentials;
-use crate::ExitCode;
 
 #[derive(Debug, Args)]
 pub(crate) struct AgentsArgs {
@@ -445,9 +445,15 @@ async fn lifecycle(
         Err(c) => return c,
     };
     let result = match verb {
-        LifecycleVerb::Suspend => client.suspend(&args.id, &tenant, args.reason.as_deref()).await,
+        LifecycleVerb::Suspend => {
+            client
+                .suspend(&args.id, &tenant, args.reason.as_deref())
+                .await
+        }
         LifecycleVerb::Unsuspend => {
-            client.unsuspend(&args.id, &tenant, args.reason.as_deref()).await
+            client
+                .unsuspend(&args.id, &tenant, args.reason.as_deref())
+                .await
         }
         LifecycleVerb::Decommission => {
             client
@@ -608,7 +614,11 @@ fn print_table(rows: &[AgentRecord]) {
         .min(32);
     println!(
         "{:<name_w$}  {:<14}  {:<team_w$}  {:>6}  {:>13}  ID",
-        "AGENT_NAME", "STATE", "OWNER_TEAM", "SCOPES", "YELLOW_SCOPES",
+        "AGENT_NAME",
+        "STATE",
+        "OWNER_TEAM",
+        "SCOPES",
+        "YELLOW_SCOPES",
         name_w = name_w,
         team_w = team_w
     );
@@ -726,5 +736,4 @@ mod tests {
         let r = rec("support-bot-3", AgentState::Active, "payments");
         print_record(&r);
     }
-
 }

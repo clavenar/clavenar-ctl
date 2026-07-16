@@ -11,9 +11,7 @@
 //! `CLAVENAR_POLICY_URL` env → `http://localhost:8082`.
 
 use clap::Args;
-use clavenar_sdk::{
-    BatchStateChangeRequest, ClavenarError, PoliciesClient, StateChangeRequest,
-};
+use clavenar_sdk::{BatchStateChangeRequest, ClavenarError, PoliciesClient, StateChangeRequest};
 
 use crate::ExitCode;
 
@@ -117,7 +115,10 @@ async fn single(
     };
     match result {
         Ok(resp) => {
-            println!("{}ed {} (v{}, active={})", verb, resp.name, resp.version, resp.active);
+            println!(
+                "{}ed {} (v{}, active={})",
+                verb, resp.name, resp.version, resp.active
+            );
             ExitCode::Ok
         }
         Err(ClavenarError::Server { status, body }) if status.as_u16() == 409 => {

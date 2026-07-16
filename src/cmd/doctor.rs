@@ -96,11 +96,7 @@ fn defaults_lookup(service: &str) -> &'static str {
         .expect("service has a builtin default")
 }
 
-fn pick_url(
-    service: &'static str,
-    flag: Option<String>,
-    env_key: &str,
-) -> (String, bool) {
+fn pick_url(service: &'static str, flag: Option<String>, env_key: &str) -> (String, bool) {
     if let Some(v) = flag {
         return (v, true);
     }
@@ -152,8 +148,11 @@ pub(crate) async fn run(args: DoctorArgs) -> ExitCode {
             ("brain", health_url(&u), ovr)
         },
         {
-            let (u, ovr) =
-                pick_url("policy-engine", args.policy_engine_url, "CLAVENAR_POLICY_URL");
+            let (u, ovr) = pick_url(
+                "policy-engine",
+                args.policy_engine_url,
+                "CLAVENAR_POLICY_URL",
+            );
             ("policy-engine", health_url(&u), ovr)
         },
         {

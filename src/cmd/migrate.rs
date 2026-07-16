@@ -50,12 +50,12 @@ use std::path::PathBuf;
 
 use clap::Args;
 use clavenar_sdk::{
-    create_request_matches, AgentsClient, CreateAgentRequest, MIGRATION_ACTOR_SUB_PREFIX,
+    AgentsClient, CreateAgentRequest, MIGRATION_ACTOR_SUB_PREFIX, create_request_matches,
 };
 
+use crate::ExitCode;
 use crate::config;
 use crate::credentials;
-use crate::ExitCode;
 
 #[derive(Debug, Args)]
 pub(crate) struct MigrateArgs {
@@ -269,7 +269,10 @@ pub(crate) async fn run(args: MigrateArgs, cfg: &config::Config, url: &str) -> E
         }
     };
     if names.is_empty() {
-        eprintln!("(no names in {} — nothing to migrate)", args.names.display());
+        eprintln!(
+            "(no names in {} — nothing to migrate)",
+            args.names.display()
+        );
         return ExitCode::Ok;
     }
 
@@ -284,8 +287,15 @@ pub(crate) async fn run(args: MigrateArgs, cfg: &config::Config, url: &str) -> E
         yellow_scope: &args.default_yellow_scope,
         attestation_kinds: &args.default_attestation_kind,
     };
-    let (outcomes, hard_failure) =
-        enroll_names(&client, &tenant, &actor_sub, &names, &defaults, args.dry_run).await;
+    let (outcomes, hard_failure) = enroll_names(
+        &client,
+        &tenant,
+        &actor_sub,
+        &names,
+        &defaults,
+        args.dry_run,
+    )
+    .await;
 
     if args.json {
         match serde_json::to_string_pretty(&outcomes) {
@@ -334,8 +344,18 @@ pub(crate) fn print_outcomes(outcomes: &[Outcome], dry_run: bool) {
         println!("(no rows)");
         return;
     }
-    let name_w = outcomes.iter().map(|o| o.name.len()).max().unwrap_or(0).max(4);
-    let action_w = outcomes.iter().map(|o| o.action.len()).max().unwrap_or(0).max(6);
+    let name_w = outcomes
+        .iter()
+        .map(|o| o.name.len())
+        .max()
+        .unwrap_or(0)
+        .max(4);
+    let action_w = outcomes
+        .iter()
+        .map(|o| o.action.len())
+        .max()
+        .unwrap_or(0)
+        .max(6);
     println!(
         "{:<name_w$}  {:<action_w$}  ID                                   ERROR",
         "NAME",
@@ -357,10 +377,7 @@ pub(crate) fn print_outcomes(outcomes: &[Outcome], dry_run: bool) {
         );
     }
     println!();
-    let mut summary: Vec<String> = counts
-        .iter()
-        .map(|(k, v)| format!("{k}: {v}"))
-        .collect();
+    let mut summary: Vec<String> = counts.iter().map(|(k, v)| format!("{k}: {v}")).collect();
     if dry_run {
         summary.insert(0, "DRY-RUN".into());
     }
@@ -381,7 +398,10 @@ mod tests {
         )
         .unwrap();
         let names = read_names_file(tmp.path()).unwrap();
-        assert_eq!(names, vec!["support-bot-3".to_string(), "legacy-bot".into()]);
+        assert_eq!(
+            names,
+            vec!["support-bot-3".to_string(), "legacy-bot".into()]
+        );
     }
 
     #[test]

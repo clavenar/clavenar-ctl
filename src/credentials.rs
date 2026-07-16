@@ -28,7 +28,7 @@
 //! the `id_token` is what the user supplied verbatim and `refresh_token`
 //! is always `None`.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -84,10 +84,10 @@ pub(crate) fn load() -> Result<Credentials> {
     if !path.exists() {
         return Ok(Credentials::default());
     }
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let creds: Credentials = serde_json::from_str(&body)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let body =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let creds: Credentials =
+        serde_json::from_str(&body).with_context(|| format!("parse {}", path.display()))?;
     Ok(creds)
 }
 
@@ -98,12 +98,10 @@ pub(crate) fn load() -> Result<Credentials> {
 pub(crate) fn save(creds: &Credentials) -> Result<()> {
     let path = credentials_path()?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("create {}", parent.display()))?;
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
     let body = serde_json::to_string_pretty(creds)?;
-    write_0600(&path, body.as_bytes())
-        .with_context(|| format!("write {}", path.display()))?;
+    write_0600(&path, body.as_bytes()).with_context(|| format!("write {}", path.display()))?;
     Ok(())
 }
 
@@ -151,10 +149,12 @@ pub(crate) struct UnverifiedClaims {
 /// `created_by_sub` audit field on `agents create` from the
 /// cached creds without re-parsing the JWT on every call.
 pub(crate) fn unverified_decode(id_token: &str) -> Result<UnverifiedClaims> {
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::{Engine as _, engine::general_purpose};
     let parts: Vec<&str> = id_token.split('.').collect();
     if parts.len() != 3 {
-        return Err(anyhow!("token is not in JWT compact form (expected 3 parts)"));
+        return Err(anyhow!(
+            "token is not in JWT compact form (expected 3 parts)"
+        ));
     }
     let payload = general_purpose::URL_SAFE_NO_PAD
         .decode(parts[1])
@@ -187,15 +187,14 @@ mod tests {
     // Use a base64 dep transitively via clavenar-sdk → don't add a direct
     // dep just for tests; mint test JWTs via base64 from std::format!.
     use super::*;
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::{Engine as _, engine::general_purpose};
 
     #[test]
     fn unverified_decode_extracts_sub_iss_exp() {
         // Hand-build a JWT compact form: `<base64url(header)>.<base64url(payload)>.<sig>`.
         let header = general_purpose::URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
-        let payload = general_purpose::URL_SAFE_NO_PAD.encode(
-            br#"{"sub":"user:alice@acme.com","iss":"https://idp.test/","exp":1830000000}"#,
-        );
+        let payload = general_purpose::URL_SAFE_NO_PAD
+            .encode(br#"{"sub":"user:alice@acme.com","iss":"https://idp.test/","exp":1830000000}"#);
         let token = format!("{header}.{payload}.sig");
         let claims = unverified_decode(&token).unwrap();
         assert_eq!(claims.sub.as_deref(), Some("user:alice@acme.com"));
@@ -236,7 +235,9 @@ mod tests {
         let prev = std::env::var("CLAVENAR_CREDENTIALS_PATH").ok();
         // SAFETY: the test runs in a single-threaded `#[test]` slot.
         // `set_var`/`remove_var` are safe in this scope. Restored at the end.
-        unsafe { std::env::set_var("CLAVENAR_CREDENTIALS_PATH", &target); }
+        unsafe {
+            std::env::set_var("CLAVENAR_CREDENTIALS_PATH", &target);
+        }
 
         let mut creds = Credentials::default();
         creds.tenants.insert(
@@ -279,7 +280,9 @@ mod tests {
         let body = serde_json::to_string(&creds).unwrap();
         let again: Credentials = serde_json::from_str(&body).unwrap();
         assert_eq!(again.tenants["acme"].id_token, "tok-123");
-        assert_eq!(again.tenants["acme"].refresh_token.as_deref(), Some("rt-456"));
+        assert_eq!(
+            again.tenants["acme"].refresh_token.as_deref(),
+            Some("rt-456")
+        );
     }
 }
-

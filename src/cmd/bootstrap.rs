@@ -11,11 +11,11 @@
 use std::io::{self, IsTerminal, Write};
 
 use clap::Args;
-use clavenar_sdk::{create_request_matches, CreateAgentRequest};
+use clavenar_sdk::{CreateAgentRequest, create_request_matches};
 
+use crate::ExitCode;
 use crate::cmd::agents::build_client;
 use crate::config;
-use crate::ExitCode;
 
 #[derive(Debug, Args)]
 pub(crate) struct BootstrapArgs {
@@ -48,7 +48,11 @@ const TEMPLATES: &[&str] = &["minimal", "read-only", "read-write", "custom"];
 fn parse_scope_list(input: &str) -> Vec<String> {
     let mut seen = std::collections::BTreeSet::new();
     let mut out = Vec::new();
-    for tok in input.split([',', ' ', '\t']).map(str::trim).filter(|t| !t.is_empty()) {
+    for tok in input
+        .split([',', ' ', '\t'])
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
         if seen.insert(tok.to_string()) {
             out.push(tok.to_string());
         }
@@ -116,9 +120,12 @@ pub(crate) async fn run(args: BootstrapArgs, cfg: &config::Config, url: &str) ->
             eprintln!("  (choose one of: {})", TEMPLATES.join(", "));
         };
         let (scope, yellow) = if template == "custom" {
-            let scope = parse_scope_list(&prompt("Scopes (comma-separated, blank = none)", Some(""))?);
-            let yellow =
-                parse_scope_list(&prompt("Yellow-tier scopes (comma-separated, blank = none)", Some(""))?);
+            let scope =
+                parse_scope_list(&prompt("Scopes (comma-separated, blank = none)", Some(""))?);
+            let yellow = parse_scope_list(&prompt(
+                "Yellow-tier scopes (comma-separated, blank = none)",
+                Some(""),
+            )?);
             (scope, yellow)
         } else {
             envelope_for_template(&template).expect("validated template")
@@ -179,7 +186,10 @@ pub(crate) async fn run(args: BootstrapArgs, cfg: &config::Config, url: &str) ->
     match client.find_by_name(&tenant, &name).await {
         Ok(Some(existing)) => {
             if create_request_matches(&req, &existing) {
-                println!("agent '{name}' already registered (id {}) — nothing to do.", existing.id);
+                println!(
+                    "agent '{name}' already registered (id {}) — nothing to do.",
+                    existing.id
+                );
                 return ExitCode::Ok;
             }
             eprintln!(

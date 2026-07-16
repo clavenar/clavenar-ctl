@@ -16,13 +16,13 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use clap::Args;
-use clavenar_chaos_catalog::{catalog, Attack, Category};
+use clavenar_chaos_catalog::{Attack, Category, catalog};
 use clavenar_sdk::{CertificationCase, CertificationRequest};
 use reqwest::{Certificate, Client, Identity};
 use sha2::{Digest, Sha256};
 
 use crate::cmd::agents::build_client;
-use crate::{config, ExitCode};
+use crate::{ExitCode, config};
 
 /// Proxy MCP endpoint used when neither the flag nor the env var is set.
 const DEFAULT_PROXY_URL: &str = "https://localhost:8443/mcp";
