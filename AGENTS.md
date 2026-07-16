@@ -18,15 +18,14 @@ cargo cyclonedx --format json --describe crate   # SBOM
 Host caveat: this repo's `target/` may be root-owned from prior docker
 builds — build on the host with `CARGO_TARGET_DIR=/tmp/clavenar-ctl-target`.
 
-Sibling path-deps: this crate is **not** in a Cargo workspace. It depends
-on `../clavenar-sdk` and `../clavenar-chaos-catalog` by path, `include_str!`s
-Rego templates from `../clavenar-policy-engine/policies/templates/`
-(the `generate-policy` starter pack), and `include_str!`s
+Sibling inputs: this crate is **not** in a Cargo workspace. It depends on
+`../clavenar-sdk` and `../clavenar-chaos-catalog` by path, `include_str!`s Rego
+templates from `../clavenar-policy-engine/policies/templates/` (the
+`generate-policy` starter pack), and `include_str!`s
 `../clavenar-lite/policies/governance.rego` (the `init --guard` starter
-policy) — all four siblings must be present to build. CI clones only
-`clavenar-sdk` and `clavenar-policy-engine` into the same relative location
-via the `CLAVENAR_REPO_TOKEN` secret; chaos-catalog and lite are not cloned
-(known CI gap) — clone all four when reproducing CI locally.
+policy). CI derives all four from Cargo manifests and literal Rust include
+paths with the SHA-256-checked assembler snapshot pinned to its recorded
+`clavenar-e2e` source commit; do not restore a hand-maintained clone list.
 
 Run: `clavenarctl <verb>` (e.g. `clavenarctl doctor`, `clavenarctl agents list
 --tenant <T>`). No listener — it's a client; it talks to identity (`:8086`),
