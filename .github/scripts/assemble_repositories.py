@@ -494,7 +494,9 @@ def clone_repository(
             env=environment,
         )
         _run(
-            ("git", "-C", str(staging), "checkout", "--detach", "FETCH_HEAD"),
+            _authenticated_git_command(
+                "-C", str(staging), "checkout", "--detach", "FETCH_HEAD"
+            ),
             env=environment,
         )
         state = validate_repository(staging, name=name, owner=owner, ref="FETCH_HEAD")

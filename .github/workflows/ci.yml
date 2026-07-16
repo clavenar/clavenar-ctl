@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v5
 
       # Manifest assembler vendored byte-for-byte from clavenar-e2e commit
-      # 8648e8c5b259922c35fc48acad9d4618f9b17d92. It derives Cargo path deps
+      # 206bdb608d377bbdfdffddc4060469e296dba721. It derives Cargo path deps
       # and literal Rust include_str!/include_bytes! sibling inputs.
       - name: assemble compile-time sibling inputs
         env:
@@ -41,7 +41,7 @@ jobs:
             echo "::error::CLAVENAR_REPO_TOKEN secret not set for manifest-derived sibling checkout."
             exit 1
           fi
-          echo "7fd09408f7a87cde37e6b9aaa410a4cb92efcc0ac01f51aaab710d3d0feecd6b  .github/scripts/assemble_repositories.py" | sha256sum -c -
+          echo "07a6d7490c9b165befb67e2e8beadc04c82feafc3d1310d40d79c112f68beea5  .github/scripts/assemble_repositories.py" | sha256sum -c -
           python3 .github/scripts/assemble_repositories.py checkout \
             --root "$GITHUB_WORKSPACE" --ref main > assembly-receipt.json
 
@@ -93,7 +93,7 @@ jobs:
             echo "::error::CLAVENAR_REPO_TOKEN secret not set for manifest-derived sibling checkout."
             exit 1
           fi
-          echo "7fd09408f7a87cde37e6b9aaa410a4cb92efcc0ac01f51aaab710d3d0feecd6b  .github/scripts/assemble_repositories.py" | sha256sum -c -
+          echo "07a6d7490c9b165befb67e2e8beadc04c82feafc3d1310d40d79c112f68beea5  .github/scripts/assemble_repositories.py" | sha256sum -c -
           python3 .github/scripts/assemble_repositories.py checkout \
             --root "$GITHUB_WORKSPACE" --ref main > assembly-receipt.json
 
