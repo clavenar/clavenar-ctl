@@ -251,37 +251,27 @@ Get a single agent, human-readable:
 clavenarctl agents get 01HW...A001 --tenant acme
 ```
 
-## Approve from the terminal
+## Inspect a decision link from the terminal
 
-`clavenarctl pending decide <token>` redeems a signed decision link —
+`clavenarctl pending decide <token>` verifies and previews a signed decision link —
 the same `approve`/`deny` token carried in HIL notifier cards (Slack,
 Teams, PagerDuty, webhook, SMTP) or minted via
 `GET /pending/{id}/decision-link` — from a shell, for terminal-resident
 operators.
 
 ```sh
-# Dry run — verify the link and preview the pending it points at.
+# Verify the link and preview the pending it points at.
 clavenarctl pending decide <token> \
   --hil-url https://hil.internal:8084 \
   --cert ops.crt --key ops.key --ca ca.crt
-
-# Apply the token's action (approve/deny is baked into the signature).
-clavenarctl pending decide <token> \
-  --hil-url https://hil.internal:8084 \
-  --cert ops.crt --key ops.key --ca ca.crt \
-  --decide-token "$CLAVENAR_HIL_DECIDE_TOKEN" \
-  --as "oidc:alice@example.com" --reason "approved on call" --yes
 ```
 
 The token is a *pointer plus an action claim, never a credential*:
-deciding needs the operator's own standing authority — an mTLS client
-cert in HIL's caller allowlist (`CLAVENAR_HIL_ALLOWED_CALLERS`) **plus**
-the `CLAVENAR_HIL_DECIDE_TOKEN` trusted-caller bearer (also read from the
-env var if `--decide-token` is omitted). `--as` stamps the operator into
-the audit chain (defaults to `ctl:$USER`), and the decision is marked
-`decided_via=terminal` on the chain row so an auditor can tell a CLI
-redemption from a console or chat-card decision. Without `--yes` nothing
-is decided; a link whose pending already settled exits `4` (conflict).
+the CLI deliberately has no decision authority. HIL derives decision
+principals from authenticated server state, so apply the link through the
+Console redemption page and its normal operator session. The retained hidden
+`--yes` compatibility flag returns exit `3` and sends no mutation. A link whose
+pending already settled exits `4` (conflict) during inspection.
 
 ## Connect an MCP client
 

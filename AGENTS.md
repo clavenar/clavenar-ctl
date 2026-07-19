@@ -75,12 +75,11 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
   operator's real file from a test.
 - **`auth whoami` decodes JWT claims without verifying the signature** —
   display only. Server-side validation on every request stays authoritative.
-- **`pending decide <token>` token is a pointer + action claim, never a
-  credential.** Deciding still requires the operator's own standing
-  authority: an mTLS client cert in HIL's allowlist plus the decide-token
-  bearer (`CLAVENAR_HIL_DECIDE_TOKEN` / `--decide-token`). `--as` stamps the
-  operator into the chain; rows are marked `decided_via=terminal`. Nothing is
-  decided without `--yes`.
+- **`pending decide <token>` is inspection-only.** It verifies and previews a
+  signed link, but HIL no longer accepts caller-supplied terminal principals.
+  The action must be redeemed through an authenticated Console session; the
+  retained hidden `--yes` compatibility flag fails with exit code 3 and sends
+  no mutation.
 - **`generate-policy` templates are embedded at build time** via
   `include_str!` from the policy-engine sibling — no runtime FS dependency,
   but the sibling must be present at compile time (hence the CI clone).

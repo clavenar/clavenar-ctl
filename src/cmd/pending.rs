@@ -1,25 +1,23 @@
-//! `clavenarctl pending decide <token>` — redeem a signed decision link
-//! one-shot from the terminal.
+//! `clavenarctl pending decide <token>` — inspect a signed decision link
+//! from the terminal.
 //!
 //! Channel-carried decision links (Slack / Teams / PagerDuty / webhook /
 //! SMTP) and the console redemption page both decide through HIL. This
 //! brings the same token to a terminal-resident operator: verify it
-//! against HIL, show the pending it points at, and — with `--yes` —
-//! decide through HIL's trusted-caller bearer path.
+//! against HIL and show the pending it points at. Applying the action stays
+//! behind an authenticated Console session because HIL no longer accepts a
+//! caller-supplied terminal identity.
 //!
 //! The token is a *pointer plus an action claim*, never a bearer
-//! credential: deciding still needs the operator's own standing
-//! authority — an mTLS client cert in HIL's caller allowlist *plus* the
-//! `CLAVENAR_HIL_DECIDE_TOKEN`. A leaked link alone decides nothing, and
-//! the action is signature-bound, so an `approve` link can't be replayed
-//! as a `deny`.
+//! credential. A leaked link alone decides nothing, and the action is
+//! signature-bound, so an `approve` link can't be replayed as a `deny`.
 
 use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Subcommand};
 use clavenar_sdk::ClavenarError;
-use clavenar_sdk::hil::{Decision, DecisionLinkPending, HilClient, HilDecideCredential};
+use clavenar_sdk::hil::{DecisionLinkPending, HilClient};
 use reqwest::{Certificate, Client, Identity};
 
 use crate::ExitCode;
@@ -60,20 +58,18 @@ pub(crate) struct DecideArgs {
     /// PEM CA bundle HIL's server cert chains to.
     #[arg(long)]
     pub ca: PathBuf,
-    /// HIL trusted-caller bearer (`CLAVENAR_HIL_DECIDE_TOKEN`). Required
-    /// only when applying (`--yes`); the verify/preview step doesn't need
-    /// it. Falls back to the `CLAVENAR_HIL_DECIDE_TOKEN` env var.
-    #[arg(long)]
+    /// Retired compatibility flag. Direct terminal decisions are rejected;
+    /// apply the link through an authenticated Console session.
+    #[arg(long, hide = true)]
     pub decide_token: Option<String>,
-    /// Identity recorded as `decided_by` in the audit chain. Defaults to
-    /// `ctl:$USER`. Pass the operator's real identity for a clean trail.
-    #[arg(long = "as")]
+    /// Retired compatibility flag. HIL derives decision identity server-side.
+    #[arg(long = "as", hide = true)]
     pub decided_by: Option<String>,
-    /// Optional free-text reason stored on the decision.
-    #[arg(long)]
+    /// Retired compatibility flag. Direct terminal decisions are disabled.
+    #[arg(long, hide = true)]
     pub reason: Option<String>,
-    /// Apply the decision. Without it the command is a dry run: it
-    /// verifies the token and prints the pending, but decides nothing.
+    /// Retired compatibility flag. Returns an authentication error and never
+    /// sends a decision; redeem through the authenticated Console instead.
     #[arg(long, default_value_t = false)]
     pub yes: bool,
     /// Skip server certificate validation. Dev stack only — prod issues
@@ -147,70 +143,16 @@ async fn decide(args: DecideArgs) -> ExitCode {
 
     print_pending(&pending_id.to_string(), &action, verify.pending.as_ref());
 
-    // Step 2 — apply, only on explicit --yes. The dry run above is the
-    // safe default for a mutating one-shot.
-    if !args.yes {
-        println!("\ndry run — re-run with --yes to {action} this pending.");
-        return ExitCode::Ok;
-    }
-
-    // The action claim is signature-bound to approve/deny; anything else
-    // is a HIL contract drift we refuse to apply.
-    let decision = match action.as_str() {
-        "approve" => Decision::Approve,
-        "deny" => Decision::Deny,
-        other => {
-            eprintln!("error: unsupported decision-link action {other:?}");
-            return ExitCode::Validation;
-        }
-    };
-
-    let Some(decide_token) = args
-        .decide_token
-        .clone()
-        .or_else(|| std::env::var("CLAVENAR_HIL_DECIDE_TOKEN").ok())
-        .filter(|s| !s.is_empty())
-    else {
+    if args.yes {
         eprintln!(
-            "error: deciding needs the HIL trusted-caller bearer — pass --decide-token \
-             or set CLAVENAR_HIL_DECIDE_TOKEN"
+            "error: direct terminal decisions are disabled because HIL derives the decision \
+             principal from authenticated server state; redeem this link through the Console"
         );
         return ExitCode::Auth;
-    };
-    let stamp = resolve_stamp(args.decided_by.as_deref());
-
-    // `decided_via` is constant `terminal`: the CLI always decides from a
-    // shell, and HIL trusts the marker because the trusted-caller bearer
-    // is the anchor.
-    let result = hil
-        .decide(
-            pending_id,
-            decision,
-            &stamp,
-            args.reason.clone(),
-            None,
-            None,
-            Some(HilDecideCredential::Bearer {
-                token: &decide_token,
-                decided_by: &stamp,
-            }),
-            Some("terminal"),
-        )
-        .await;
-    match result {
-        Ok(_) => {
-            println!("{action}d pending {pending_id} as {stamp}.");
-            ExitCode::Ok
-        }
-        Err(ClavenarError::Server { status, body }) => {
-            eprintln!("error: decide returned HTTP {status}: {}", body.trim());
-            exit_for_status(status.as_u16())
-        }
-        Err(e) => {
-            eprintln!("error: decide against {hil_url}: {e}");
-            ExitCode::Server
-        }
     }
+
+    println!("\ninspection only — redeem this link through the authenticated Console to {action}.");
+    ExitCode::Ok
 }
 
 async fn build_client(args: &DecideArgs) -> anyhow::Result<Client> {
@@ -245,18 +187,6 @@ fn print_pending(pending_id: &str, action: &str, summary: Option<&DecisionLinkPe
     }
 }
 
-/// `decided_by` stamp: the `--as` override, else `ctl:$USER`, else a
-/// bare `clavenarctl` when even `$USER` is unset.
-fn resolve_stamp(as_arg: Option<&str>) -> String {
-    if let Some(s) = as_arg.map(str::trim).filter(|s| !s.is_empty()) {
-        return s.to_string();
-    }
-    match std::env::var("USER").ok().filter(|s| !s.is_empty()) {
-        Some(user) => format!("ctl:{user}"),
-        None => "clavenarctl".to_string(),
-    }
-}
-
 /// Map a non-`valid` verify reason to an operator message + exit code.
 /// `expired` / `invalid` / `gone` are client-side problems (Validation);
 /// `not_pending` means the row already settled (Conflict).
@@ -288,23 +218,6 @@ fn exit_for_status(status: u16) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn resolve_stamp_prefers_explicit_as() {
-        assert_eq!(resolve_stamp(Some("oidc:alice")), "oidc:alice");
-        assert_eq!(resolve_stamp(Some("  spaced  ")), "spaced");
-    }
-
-    #[test]
-    fn resolve_stamp_falls_back_to_user_then_default() {
-        // Blank --as is treated as unset; the env-driven branch is left
-        // to integration use (we don't mutate process env in a unit test).
-        let stamp = resolve_stamp(Some("   "));
-        assert!(
-            stamp.starts_with("ctl:") || stamp == "clavenarctl",
-            "unexpected stamp {stamp}"
-        );
-    }
 
     #[test]
     fn explain_invalid_maps_reasons_to_exit_codes() {

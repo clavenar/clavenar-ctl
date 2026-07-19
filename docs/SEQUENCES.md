@@ -18,7 +18,7 @@ clavenar service, ordered against the actual source: `src/main.rs`,
 | Ledger | `clavenar-ledger` — `/audit/replay/corpus`, `/export/regulatory`. | external |
 | Policy | `clavenar-policy-engine` — `/policies/evaluate-batch`, `/policies/mine`. | external |
 | Proxy | `clavenar-proxy` mTLS `/mcp` — the mcp-bridge target. | external |
-| HIL | `clavenar-hil` — `/decision-link/verify`, `/decide/{id}` over mTLS; the `pending decide` target. | external |
+| HIL | `clavenar-hil` — `/decision-link/verify` over mTLS; the inspection target. Actual redemption stays in Console. | external |
 | MCPClient | Real MCP client (Claude Code, Cursor, Cline, Continue, Codex, generic) — talks to clavenarctl over stdio. | external |
 | ExitMap | `ExitCode::from_clavenar_error` — spec §9.3 mapping. | `src/main.rs::ExitCode` |
 
@@ -442,17 +442,15 @@ sequenceDiagram
 
 ---
 
-## 6. `clavenarctl pending decide` — signed decision-link redemption
+## 6. `clavenarctl pending decide` — signed decision-link inspection
 
 A channel-carried decision link (Slack / Teams / PagerDuty / webhook /
 SMTP card, or one minted via `GET /pending/{id}/decision-link`) redeemed
-one-shot from the terminal. The token is a *pointer + action claim*,
-never a bearer credential: deciding still needs the operator's own
-standing authority — an mTLS client cert in HIL's caller allowlist
-(`CLAVENAR_HIL_ALLOWED_CALLERS`) **plus** the trusted-caller bearer
-(`CLAVENAR_HIL_DECIDE_TOKEN`). A leaked link alone decides nothing, and
-the action is signature-bound so an `approve` link can't be replayed as
-a `deny`.
+from the terminal for inspection. The token is a *pointer + action claim*,
+never a bearer credential. HIL derives decision principals from authenticated
+server state, so the CLI cannot apply it; the operator redeems through the
+authenticated Console. A leaked link alone decides nothing, and the action is
+signature-bound so an `approve` link can't be replayed as a `deny`.
 
 ```mermaid
 sequenceDiagram
@@ -462,7 +460,7 @@ sequenceDiagram
     participant Reqwest as mTLS client
     participant HIL
 
-    Operator->>Clavenarctl: clavenarctl pending decide <token> --cert .. --key .. --ca .. [--yes]
+    Operator->>Clavenarctl: clavenarctl pending decide <token> --cert .. --key .. --ca ..
 
     alt --hil-url / CLAVENAR_HIL_URL unset
         Clavenarctl--xOperator: stderr error. exit Validation (2).
@@ -494,53 +492,28 @@ sequenceDiagram
         end
     end
 
-    alt no --yes
-        Clavenarctl-->>Operator: stdout "dry run — re-run with --yes". exit Ok (0). Nothing decided.
-    else --yes
-        alt --decide-token / CLAVENAR_HIL_DECIDE_TOKEN unset
-            Clavenarctl--xOperator: stderr. exit Auth (3).
-        end
-        Clavenarctl-->>Clavenarctl: resolve_stamp — --as, else ctl:$USER, else clavenarctl
-        Clavenarctl->>Reqwest: POST <hil>/decide/{pending_id} (bearer decide_token, x-clavenar-decided-by: stamp) {decision: action, decided_by, reason?, decided_via: "terminal"}
-        Reqwest->>HIL: POST
-        alt transport error
-            Reqwest--xClavenarctl: error
-            Clavenarctl--xOperator: stderr. exit Server.
-        else 200 OK
-            HIL-->>Clavenarctl: settled — decided_via=terminal stamped on the chain row
-            Clavenarctl-->>Operator: stdout "<action>d pending <id> as <stamp>". exit Ok.
-        else non-2xx (409 already settled, 401/403 caller not allowed, ...)
-            HIL-->>Clavenarctl: status + body
-            Clavenarctl--xOperator: exit_for_status — 409 -> Conflict.
-        end
+    Clavenarctl-->>Operator: stdout "inspection only — redeem through authenticated Console". exit Ok (0). Nothing decided.
+    opt retired hidden --yes compatibility flag
+        Clavenarctl--xOperator: stderr explains server-derived principal requirement. exit Auth (3). No POST /decide.
     end
 ```
 
 **Non-obvious behaviour.**
 
 - The token is a **pointer + action claim, not a bearer.** The verify
-  step (`POST /decision-link/verify`) is ungated and only confirms the
-  signature, expiry, and that the pending is still actionable. The
-  actual decide (`POST /decide/{id}`) rides HIL's trusted-caller path:
-  an allowlisted mTLS client cert **and** the `CLAVENAR_HIL_DECIDE_TOKEN`
-  bearer. A copied link can be previewed by anyone who can reach HIL,
-  but only a standing operator can apply it.
-- **Dry run by default.** Without `--yes` the command verifies and prints
-  the pending, then exits Ok having decided nothing — the safe default
-  for a mutating one-shot. `--yes` is the explicit apply gate.
+  step (`POST /decision-link/verify`) confirms the signature, expiry, and
+  that the pending is still actionable. A copied link can be previewed by
+  a caller that can reach the governed HIL read path, but applying it requires
+  an authenticated Console session.
+- **Inspection only.** The command verifies and prints the pending, then exits
+  Ok having decided nothing. The retained hidden `--yes` compatibility flag
+  fails with Auth and never calls `/decide`.
 - The action is **signature-bound** — `approve` / `deny` is baked into
   the signed token, so a redeemer can't flip an `approve` link into a
   `deny`. The CLI forwards `decision: action` verbatim from the verified
   token, never from a flag.
-- Every applied decision stamps `decided_via: "terminal"` in the body
-  and the `x-clavenar-decided-by` header (the `--as` stamp, else
-  `ctl:$USER`, else `clavenarctl`), so the audit chain distinguishes a
-  terminal redemption from a console / channel one.
-- A **409 on the decide call** means the pending already settled (raced
-  by another approver, or expired) — mapped to `Conflict` (4) via
-  `exit_for_status`, the same code `explain_invalid`'s `not_pending`
-  reason yields on the verify step. Re-redeeming a spent link loses
-  loudly rather than double-deciding.
+- A spent link returns `not_pending` from verification and maps to Conflict
+  (4). Re-inspecting it loses loudly rather than presenting stale authority.
 
 ---
 

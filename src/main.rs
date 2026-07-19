@@ -73,10 +73,8 @@ enum Command {
     /// Read-only access to the registered agents table. Writes
     /// land later.
     Agents(cmd::agents::AgentsArgs),
-    /// Redeem a signed decision link from the terminal:
-    /// `pending decide <token>` verifies the link against HIL and (with
-    /// `--yes`) applies the token's approve/deny action via the
-    /// trusted-caller bearer path.
+    /// Inspect a signed HIL decision link from the terminal. Applying its
+    /// action requires the authenticated Console redemption flow.
     Pending(cmd::pending::PendingArgs),
     /// Regulatory exports: produce EU-AI-Act bundles
     /// from the ledger over a time window.
