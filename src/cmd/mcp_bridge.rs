@@ -149,7 +149,16 @@ pub(crate) async fn run(args: McpBridgeArgs) -> ExitCode {
             .is_some_and(|m| m.starts_with("notifications/"))
             || body.get("id").is_none();
 
-        let resp = match client.post(endpoint.clone()).json(&body).send().await {
+        let mut request = client.post(endpoint.clone());
+        if let Some(idempotency_id) = server_execution_id(&body) {
+            request = request
+                .header(
+                    "x-clavenar-server-execution-contract",
+                    "clavenar.server-execution/v1",
+                )
+                .header("x-clavenar-idempotency-id", idempotency_id.to_string());
+        }
+        let resp = match request.json(&body).send().await {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("mcp-bridge: post upstream: {e}");
@@ -199,6 +208,24 @@ pub(crate) async fn run(args: McpBridgeArgs) -> ExitCode {
     }
 }
 
+/// MCP session negotiation and enumeration are safe, unselected control
+/// traffic. Every other method is an effect-capable server execution and gets
+/// a durable UUID allocated before the network request is built.
+fn server_execution_id(body: &Value) -> Option<uuid::Uuid> {
+    let method = body.get("method").and_then(Value::as_str)?;
+    let control = matches!(
+        method,
+        "initialize"
+            | "initialized"
+            | "notifications/initialized"
+            | "tools/list"
+            | "resources/list"
+            | "prompts/list"
+            | "ping"
+    );
+    (!control).then(uuid::Uuid::new_v4)
+}
+
 async fn write_line(stdout: &mut tokio::io::Stdout, line: &str) -> std::io::Result<()> {
     stdout.write_all(line.as_bytes()).await?;
     stdout.write_all(b"\n").await?;
@@ -223,4 +250,19 @@ async fn build_client(args: &McpBridgeArgs) -> anyhow::Result<Client> {
         builder = builder.danger_accept_invalid_certs(true);
     }
     Ok(builder.build()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::server_execution_id;
+
+    #[test]
+    fn only_effect_capable_methods_select_server_execution() {
+        let control = serde_json::json!({"method": "tools/list", "id": 1});
+        assert!(server_execution_id(&control).is_none());
+
+        let tool = serde_json::json!({"method": "tools/call", "id": 2});
+        let id = server_execution_id(&tool).expect("tool call selects server execution");
+        assert_eq!(id.to_string().parse::<uuid::Uuid>().unwrap(), id);
+    }
 }

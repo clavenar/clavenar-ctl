@@ -293,6 +293,11 @@ The bridge accepts `--client-hint <name>` for diagnostics and to
 reserve the surface for future per-client behavior — recipes pass it
 for forward-compat.
 
+The bridge leaves MCP negotiation and enumeration methods unselected. For
+every effect-capable method it selects `clavenar.server-execution/v1` and
+allocates a durable idempotency UUID before the network request, so the proxy
+cannot interpret an inspection frame as authorization to execute.
+
 ## Development
 
 ```sh

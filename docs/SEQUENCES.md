@@ -389,6 +389,8 @@ sequenceDiagram
             Clavenarctl-->>Clavenarctl: log warn. drop line. continue.
         end
 
+        Clavenarctl-->>Clavenarctl: control method stays unselected; effect-capable method gets server-execution/v1 + durable UUID before network
+
         alt JSON-RPC notification (no id field)
             Clavenarctl->>Reqwest: POST <url>/mcp with frame
             Reqwest->>Proxy: TLS handshake (client cert). POST /mcp.

@@ -5,7 +5,7 @@
 # `kubernetes` repo — so the operator UX in clavenar-specs/TECH_SPEC.md#agent-onboarding-wao §9 reads
 # verbatim as the command line.
 name = "clavenar-ctl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Operator CLI for Clavenar — register agents, drive lifecycle, and verify the chain."
 license = "Apache-2.0"
@@ -50,6 +50,7 @@ hex = "0.4"
 # Init scaffolds files; doctor + policy emit them. Tempfile is used
 # by the policy module's unit tests too.
 tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 # `assert_cmd` lets the integration tests spawn `cargo run --bin clavenarctl`
