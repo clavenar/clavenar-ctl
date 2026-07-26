@@ -209,6 +209,9 @@ pub(crate) async fn run(args: CertifyArgs, cfg: &config::Config, url: &str) -> E
 /// Build an mTLS reqwest client from `client.crt` / `client.key` /
 /// `ca.crt` in `dir`. Mirrors `mcp_bridge::build_client`.
 async fn build_mtls_client(dir: &Path, insecure: bool) -> anyhow::Result<Client> {
+    if let Some(client) = crate::transport::secure_client() {
+        return Ok(client);
+    }
     let cert_pem = tokio::fs::read(dir.join("client.crt")).await?;
     let key_pem = tokio::fs::read(dir.join("client.key")).await?;
     let ca_pem = tokio::fs::read(dir.join("ca.crt")).await?;

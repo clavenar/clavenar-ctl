@@ -109,22 +109,8 @@ fn pick_url(service: &'static str, flag: Option<String>, env_key: &str) -> (Stri
 }
 
 pub(crate) async fn run(args: DoctorArgs) -> ExitCode {
-    let timeout = Duration::from_secs(args.timeout_secs);
-    // Permissive TLS verifier: the proxy ships with self-signed dev
-    // certs by default. Production operators who care can pass
-    // `--proxy-url` pointed at their real cert and the probe still
-    // works (we already accept any cert).
-    let http = match reqwest::Client::builder()
-        .timeout(timeout)
-        .danger_accept_invalid_certs(true)
-        .build()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("error: failed to build HTTP client: {}", e);
-            return ExitCode::Server;
-        }
-    };
+    let _legacy_timeout = Duration::from_secs(args.timeout_secs);
+    let http = crate::transport::client();
 
     let probes: Vec<(&'static str, String, bool)> = vec![
         {

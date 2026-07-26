@@ -29,8 +29,10 @@ mod cmd;
 mod config;
 mod credentials;
 mod device_authorization;
+mod transport;
 
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 /// `clavenarctl` — operator CLI for Clavenar.
 #[derive(Debug, Parser)]
@@ -42,6 +44,11 @@ struct Cli {
     /// identity instance without rewriting the config file.
     #[arg(long, global = true)]
     identity_url: Option<String>,
+
+    /// Versioned `clavenar.secure-transport-profile/v1` JSON used by every
+    /// network command. Falls back to `CLAVENAR_TRANSPORT_PROFILE`.
+    #[arg(long, global = true)]
+    transport_profile: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Command,
@@ -105,6 +112,10 @@ async fn main() {
         .init();
 
     let cli = Cli::parse();
+    if let Err(error) = transport::initialize(cli.transport_profile.as_deref()) {
+        eprintln!("error: {error}");
+        std::process::exit(ExitCode::Validation.code());
+    }
     let exit = run(cli).await;
     std::process::exit(exit.code());
 }

@@ -23,6 +23,18 @@ authorization grant are shipped. The device client has a fixed
 least-privilege operator scope distinct from agent workload authority.
 Manual `id_token` input remains available for offline bootstrap.
 
+Every network command accepts one reusable secure transport profile:
+
+```sh
+clavenarctl --transport-profile ./transport.json doctor
+# or: CLAVENAR_TRANSPORT_PROFILE=./transport.json clavenarctl agents list
+```
+
+The deny-unknown `clavenar.secure-transport-profile/v1` document selects the
+CA bundle, client certificate and private key, token source, connect/request
+deadlines, proxy policy, and explicit reload behavior. The same provider is
+installed before dispatch for SDK-backed and direct HTTP command paths.
+
 First-run surface (scaffold + probe + Rego templates):
 
 ```sh

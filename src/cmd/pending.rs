@@ -156,6 +156,9 @@ async fn decide(args: DecideArgs) -> ExitCode {
 }
 
 async fn build_client(args: &DecideArgs) -> anyhow::Result<Client> {
+    if let Some(client) = crate::transport::secure_client() {
+        return Ok(client);
+    }
     let cert_pem = tokio::fs::read(&args.cert).await?;
     let key_pem = tokio::fs::read(&args.key).await?;
     let ca_pem = tokio::fs::read(&args.ca).await?;

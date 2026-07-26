@@ -105,13 +105,7 @@ pub(crate) async fn authorize(
 ) -> Result<TenantCredential, DeviceAuthError> {
     validate_tenant(expected_tenant)?;
     let issuer = validate_issuer(issuer_input)?;
-    let client = Client::builder()
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(10))
-        .redirect(reqwest::redirect::Policy::none())
-        .user_agent(concat!("clavenarctl/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|error| DeviceAuthError::server(format!("build HTTP client: {error}")))?;
+    let client = crate::transport::client();
 
     let discovery_url = format!(
         "{}/.well-known/openid-configuration",

@@ -906,6 +906,15 @@ pub(crate) fn build_mtls_client(
     ca: Option<&std::path::Path>,
     resolve: &[(String, std::net::SocketAddr)],
 ) -> Result<Option<reqwest::Client>, String> {
+    if let Some(client) = crate::transport::secure_client() {
+        if !resolve.is_empty() {
+            return Err(
+                "--resolve cannot be combined with --transport-profile; encode routing in the selected proxy policy"
+                    .to_string(),
+            );
+        }
+        return Ok(Some(client));
+    }
     match (cert, key, ca) {
         (None, None, None) => Ok(None),
         (Some(cert), Some(key), Some(ca)) => {
