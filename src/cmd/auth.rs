@@ -1,17 +1,8 @@
 //! `clavenarctl auth` — login / logout / whoami.
 //!
-//! Initial surface: a "manual paste" login that reads a pre-minted
-//! `id_token` from a file or stdin and caches it in the OS-correct
-//! credentials file (Linux: `~/.config/clavenar/credentials.json`).
-//! The full RFC 8628 device-authorization grant lands later with the
-//! dex mock.
-//!
-//! Why "manual paste" first: the e2e runner (`run-onboarding.sh`)
-//! mints id_tokens directly via `dex /token` (password grant) and
-//! stuffs the credentials file before invoking other `clavenarctl`
-//! commands — that's the same path the operator uses today (mint a
-//! token via the IdP CLI, paste it in). Device-flow ships when we
-//! actually have an IdP that implements RFC 8628.
+//! The primary login surface is a bounded RFC 8628 device grant against
+//! a discovered production IdP. Manual token input remains available
+//! for offline bootstrap and compatibility.
 
 use clap::{Args, Subcommand};
 use std::io::Read;
@@ -42,12 +33,16 @@ pub(crate) struct LoginArgs {
     pub tenant: String,
     /// Path to a file whose contents are the OIDC id_token. Mutually
     /// exclusive with `--token-stdin`.
-    #[arg(long, conflicts_with = "token_stdin")]
+    #[arg(long, conflicts_with_all = ["token_stdin", "issuer"])]
     pub token_file: Option<std::path::PathBuf>,
     /// Read the token from stdin (`cat token | clavenarctl auth login
     /// --tenant acme --token-stdin`).
-    #[arg(long, conflicts_with = "token_file")]
+    #[arg(long, conflicts_with_all = ["token_file", "issuer"])]
     pub token_stdin: bool,
+    /// OIDC issuer supporting RFC 8628 discovery. Required unless a
+    /// manual token input is selected.
+    #[arg(long, conflicts_with_all = ["token_file", "token_stdin"])]
+    pub issuer: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -74,10 +69,22 @@ pub(crate) async fn run(args: AuthArgs, _identity_url: Option<String>) -> ExitCo
 }
 
 async fn login(args: LoginArgs) -> ExitCode {
+    if let Some(issuer) = args.issuer {
+        let credential = match crate::device_authorization::authorize(&issuer, &args.tenant).await {
+            Ok(credential) => credential,
+            Err(error) => {
+                eprintln!("error: {}", error.message);
+                return match error.class {
+                    crate::device_authorization::FailureClass::Validation => ExitCode::Validation,
+                    crate::device_authorization::FailureClass::Denied => ExitCode::Auth,
+                    crate::device_authorization::FailureClass::Server => ExitCode::Server,
+                };
+            }
+        };
+        return save_credential(args.tenant, credential);
+    }
     if args.token_file.is_none() && !args.token_stdin {
-        eprintln!(
-            "error: provide --token-file <PATH> or --token-stdin (device-flow is a follow-up)"
-        );
+        eprintln!("error: provide --issuer <URL>, --token-file <PATH>, or --token-stdin");
         return ExitCode::Validation;
     }
     let token = match args.token_file {
@@ -108,6 +115,17 @@ async fn login(args: LoginArgs) -> ExitCode {
     // up-front rejection here would.
     let claims = crate::credentials::unverified_decode(&token).unwrap_or_default();
 
+    let credential = TenantCredential {
+        id_token: token,
+        refresh_token: None,
+        expires_at: claims.exp,
+        sub: claims.sub,
+        issuer: claims.issuer,
+    };
+    save_credential(args.tenant, credential)
+}
+
+fn save_credential(tenant: String, credential: TenantCredential) -> ExitCode {
     let mut creds = match credentials::load() {
         Ok(c) => c,
         Err(e) => {
@@ -115,17 +133,8 @@ async fn login(args: LoginArgs) -> ExitCode {
             return ExitCode::Server;
         }
     };
-    let sub_for_print = claims.sub.clone();
-    creds.tenants.insert(
-        args.tenant.clone(),
-        TenantCredential {
-            id_token: token,
-            refresh_token: None,
-            expires_at: claims.exp,
-            sub: claims.sub,
-            issuer: claims.issuer,
-        },
-    );
+    let sub_for_print = credential.sub.clone();
+    creds.tenants.insert(tenant.clone(), credential);
     if let Err(e) = credentials::save(&creds) {
         eprintln!("error: save credentials: {e}");
         return ExitCode::Server;
@@ -135,7 +144,7 @@ async fn login(args: LoginArgs) -> ExitCode {
         .unwrap_or_else(|_| "<unknown>".into());
     println!(
         "logged in to tenant '{}' as {} (cached at {})",
-        args.tenant,
+        tenant,
         sub_for_print.as_deref().unwrap_or("<unknown sub>"),
         path
     );

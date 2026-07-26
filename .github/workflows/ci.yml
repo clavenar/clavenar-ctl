@@ -70,6 +70,9 @@ jobs:
       - name: cargo test
         run: cargo test
 
+      - name: drive RFC 8628 against pinned Keycloak
+        run: ./scripts/run-keycloak-device-authorization.sh
+
       - name: cargo clippy
         run: cargo clippy --all-targets -- -D warnings
 

@@ -18,10 +18,10 @@ Sequence diagrams for the five primary subcommands — `auth login`,
 
 ## Status
 
-Onboarding read + write surfaces all shipped. The full RFC
-8628 device-authorization-grant flow remains the open item — it lands
-once the dex mock IdP is wired in `clavenar-e2e`; until then, supply the
-`id_token` via `--token-file` or `--token-stdin`.
+Onboarding read + write surfaces and the RFC 8628 operator device-
+authorization grant are shipped. The device client has a fixed
+least-privilege operator scope distinct from agent workload authority.
+Manual `id_token` input remains available for offline bootstrap.
 
 First-run surface (scaffold + probe + Rego templates):
 
@@ -48,6 +48,7 @@ at runtime.
 Read surface:
 
 ```sh
+clavenarctl auth login   --tenant <T> --issuer <OIDC_ISSUER>
 clavenarctl auth login   --tenant <T> --token-file <PATH>
 clavenarctl auth login   --tenant <T> --token-stdin
 clavenarctl auth logout  --tenant <T>
@@ -187,22 +188,30 @@ The on-disk path follows the `directories` crate's `config_dir()`:
 Tests and the e2e runner override the path with `CLAVENAR_CREDENTIALS_PATH`
 so they don't pollute the operator's real file.
 
-Until device-flow ships, supply the token via `--token-file
-<path>` or `--token-stdin`. The expected workflow:
+Use the production IdP's exact issuer for the primary device flow:
 
 ```sh
-# Mint an id_token via your IdP CLI (Okta / Entra / dex / ...).
-mint-okta-token | clavenarctl auth login --tenant acme --token-stdin
+clavenarctl auth login \
+  --tenant acme \
+  --issuer https://idp.example/realms/acme
+
+# Follow the displayed verification URL and approve the fixed
+# `openid clavenar.operator` authority. Manual input remains explicit:
+mint-offline-token | clavenarctl auth login --tenant acme --token-stdin
 
 # Subsequent reads pick up the cached bearer.
 clavenarctl agents list --tenant acme --json
 clavenarctl auth whoami --tenant acme
 ```
 
-`auth logout --tenant <T>` drops the cached entry. The `id_token`'s
-`sub` and `iss` claims are decoded (without signature verification) at
-login time and surfaced via `auth whoami` — server-side validation on
-every request remains the authoritative check.
+Discovery and token endpoints must share the issuer origin. The CLI bounds
+response sizes, device lifetime, polling interval, poll count, redirects,
+connect time, and request time; it never persists device or user codes. It
+requires the returned ID token to carry the exact requested
+`clavenar_tenant` and operator scope without agent authority before saving
+the ID and optional refresh tokens. `auth logout --tenant <T>` drops the
+cached entry. `auth whoami` displays locally decoded bookkeeping fields;
+server-side validation on every request remains authoritative.
 
 ## Configuration
 

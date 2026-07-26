@@ -1,0 +1,77 @@
+{
+  "realm": "clavenar-device",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "oauth2DeviceCodeLifespan": 600,
+  "oauth2DevicePollingInterval": 5,
+  "clientScopes": [
+    {
+      "name": "clavenar.operator",
+      "description": "Least-privilege Clavenar human operator authority",
+      "protocol": "openid-connect",
+      "attributes": {
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "canonical tenant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "clavenar_tenant",
+            "claim.value": "acme",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "device-operator",
+      "enabled": true,
+      "email": "device-operator@example.test",
+      "emailVerified": true,
+      "firstName": "Device",
+      "lastName": "Operator",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "device-test-password",
+          "temporary": false
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "clavenar-operator-cli",
+      "name": "Clavenar least-privilege operator CLI",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": false,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true"
+      },
+      "defaultClientScopes": [
+        "clavenar.operator"
+      ],
+      "optionalClientScopes": []
+    }
+  ]
+}

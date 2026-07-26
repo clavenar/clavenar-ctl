@@ -11,11 +11,9 @@
 //! `agents`, `pending`, `regulatory`, `assurance`, `mcp-bridge`, and
 //! `import-provider-audit`.
 //!
-//! Device-authorization-grant flow (RFC 8628) is *not* yet shipped — it
-//! lands later with the dex mock where the e2e runner wires a real
-//! IdP. Until then `auth login` accepts a pre-minted id_token via
-//! `--token-file` or `--token-stdin`, which is also the workaround
-//! the spec's §13 test plan uses against dex.
+//! `auth login --issuer <URL>` uses the RFC 8628 device-authorization
+//! grant against the configured production IdP. Manual token input is
+//! retained as an explicit compatibility path for offline bootstrap.
 //!
 //! Exit codes (per spec §9.3):
 //!
@@ -30,6 +28,7 @@
 mod cmd;
 mod config;
 mod credentials;
+mod device_authorization;
 
 use clap::{Parser, Subcommand};
 

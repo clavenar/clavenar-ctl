@@ -30,48 +30,46 @@ in any of these surface as `Validation` (bad URL / arg shape) or
 
 ---
 
-## 1. `clavenarctl auth login` — cache an OIDC id_token
+## 1. `clavenarctl auth login` — bounded operator device authorization
 
-Initial surface is "manual paste" — read a pre-minted `id_token`
-from `--token-file` or `--token-stdin` and cache it. RFC 8628
-device-authorization-grant lands later. The unverified decode at
-login time is bookkeeping only; the server is the authoritative
-verifier on first use.
+The primary surface discovers and executes RFC 8628 against the exact
+issuer. The public client and `openid clavenar.operator` scope are fixed and
+disjoint from agent workload authority. Manual token input remains an explicit
+offline-bootstrap branch. Local claim decoding is a persistence guard and
+display aid; the server remains authoritative on every use.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Operator
     participant Clavenarctl as login handler
-    participant Stdin as stdin / token_file
+    participant IdP
     participant Decode as unverified_decode
     participant Credentials
 
-    Operator->>Clavenarctl: clavenarctl auth login --tenant acme --token-file ./id_token
+    Operator->>Clavenarctl: auth login --tenant acme --issuer https://idp.example/realm/acme
+    Clavenarctl->>IdP: GET exact issuer discovery
+    IdP-->>Clavenarctl: same-origin device + token endpoints
+    Clavenarctl->>IdP: POST device endpoint<br/>client_id=clavenar-operator-cli<br/>scope=openid clavenar.operator
+    IdP-->>Clavenarctl: bounded device_code, user_code, URI, expiry, interval
+    Clavenarctl-->>Operator: verification URI + user code (never persisted)
+    Operator->>IdP: authenticate and approve on independent device
 
-    alt neither --token-file nor --token-stdin
-        Clavenarctl--xOperator: stderr error. exit Validation (2). RFC 8628 follow-up is in the roadmap.
+    loop bounded interval, lifetime, and poll count
+        Clavenarctl->>IdP: device-code token grant
+        IdP-->>Clavenarctl: authorization_pending / slow_down / token
     end
 
-    alt --token-file
-        Clavenarctl->>Stdin: fs::read_to_string(path)
-        Stdin-->>Clavenarctl: token text (trimmed)
-    else --token-stdin
-        Clavenarctl->>Stdin: stdin.read_to_string
-        Stdin-->>Clavenarctl: token text (trimmed)
+    alt denial, expiry, tenant mismatch, agent scope, or ambiguity
+        Clavenarctl--xOperator: typed non-zero exit; save nothing
     end
 
-    alt empty token
-        Clavenarctl--xOperator: stderr error. exit Validation.
-    end
-
-    Clavenarctl->>Decode: unverified_decode(token)
-    Note over Decode: best-effort JWT parse. extracts sub + iss + exp for the bookkeeping fields only. Malformed token still proceeds.
-    Decode-->>Clavenarctl: TenantClaims (sub, issuer, exp) all Optional
+    Clavenarctl->>Decode: require exact issuer, tenant, subject, expiry, operator scope
+    Decode-->>Clavenarctl: bounded operator credential
 
     Clavenarctl->>Credentials: load() from OS-correct path
     Credentials-->>Clavenarctl: CredentialStore (HashMap of tenant -> TenantCredential)
-    Clavenarctl-->>Clavenarctl: store.tenants.insert(tenant, TenantCredential{id_token, sub, issuer, expires_at})
+    Clavenarctl-->>Clavenarctl: insert ID token + optional refresh token
     Clavenarctl->>Credentials: save(&store)
 
     Clavenarctl-->>Operator: stdout "logged in to tenant 'acme' as <sub> (cached at <path>)"
@@ -80,19 +78,21 @@ sequenceDiagram
 
 **Non-obvious behaviour.**
 
-- Login does **not** verify the token. A malformed paste is
-  allowed through with `sub`/`iss = None` — the server rejects it
-  on the first real call, surfacing a clearer error than a local
-  signature-verify failure would. This matches the e2e runner's
-  pattern of minting tokens via dex's password grant and stuffing
-  the credentials file directly.
+- The device branch requires HTTPS except on loopback, exact discovery issuer,
+  same-origin endpoints, bounded bodies, a 15-minute maximum lifetime, a
+  15-second maximum interval, and 180 polls at most. Redirects are disabled.
+- Device and user codes never enter logs or the credential file. A successful
+  token must carry `clavenar_tenant=<requested tenant>`,
+  `clavenar.operator`, no `clavenar.agent`, a non-empty subject, and a future
+  expiry before it can be stored.
+- Manual paste still does not verify a signature locally. It is the explicit
+  compatibility path; the server rejects malformed or invalid tokens on use.
 - The credentials file lives at the OS-correct path
   (Linux: `~/.config/clavenar/credentials.json`). The path is
   exposed in stderr on login so an operator can `cat` it to
   inspect what was stored.
-- `--token-file` and `--token-stdin` are mutually exclusive at
-  clap-parse time (`conflicts_with`). One must be supplied —
-  there is no implicit reading.
+- `--issuer`, `--token-file`, and `--token-stdin` are mutually exclusive.
+  One must be supplied; there is no implicit issuer or stdin read.
 - `logout` is a pure delete-key-from-HashMap with a `no-op` exit
   Ok when the tenant was not cached. `whoami` is the same load
   flow with no save.

@@ -23,10 +23,9 @@
 //! ```
 //!
 //! On Unix the file is created with mode `0600` so a stolen-laptop
-//! attacker without root can't read another user's token. Refresh-token
-//! flow lands later alongside the device-authorization grant; for now
-//! the `id_token` is what the user supplied verbatim and `refresh_token`
-//! is always `None`.
+//! attacker without root can't read another user's token. RFC 8628
+//! device authorization stores the returned refresh token when the IdP
+//! issues one; manual token input leaves it absent.
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Utc};
@@ -141,6 +140,7 @@ pub(crate) struct UnverifiedClaims {
     pub sub: Option<String>,
     pub issuer: Option<String>,
     pub exp: Option<DateTime<Utc>>,
+    pub tenant: Option<String>,
 }
 
 /// Decode the `sub`, `iss`, and `exp` claims from a JWT *without
@@ -169,6 +169,10 @@ pub(crate) fn unverified_decode(id_token: &str) -> Result<UnverifiedClaims> {
             .get("exp")
             .and_then(|x| x.as_i64())
             .and_then(|secs| DateTime::<Utc>::from_timestamp(secs, 0)),
+        tenant: v
+            .get("clavenar_tenant")
+            .and_then(|x| x.as_str())
+            .map(String::from),
     })
 }
 
@@ -193,13 +197,15 @@ mod tests {
     fn unverified_decode_extracts_sub_iss_exp() {
         // Hand-build a JWT compact form: `<base64url(header)>.<base64url(payload)>.<sig>`.
         let header = general_purpose::URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
-        let payload = general_purpose::URL_SAFE_NO_PAD
-            .encode(br#"{"sub":"user:alice@acme.com","iss":"https://idp.test/","exp":1830000000}"#);
+        let payload = general_purpose::URL_SAFE_NO_PAD.encode(
+            br#"{"sub":"user:alice@acme.com","iss":"https://idp.test/","exp":1830000000,"clavenar_tenant":"acme"}"#,
+        );
         let token = format!("{header}.{payload}.sig");
         let claims = unverified_decode(&token).unwrap();
         assert_eq!(claims.sub.as_deref(), Some("user:alice@acme.com"));
         assert_eq!(claims.issuer.as_deref(), Some("https://idp.test/"));
         assert_eq!(claims.exp.unwrap().timestamp(), 1_830_000_000);
+        assert_eq!(claims.tenant.as_deref(), Some("acme"));
     }
 
     #[test]
