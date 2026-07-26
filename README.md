@@ -157,6 +157,7 @@ Regulatory exports:
 
 ```sh
 clavenarctl regulatory export \
+  --tenant acme \
   --from 2026-04-01T00:00:00Z --to 2026-05-01T00:00:00Z \
   [--readme path/to/technical_documentation.md] \
   [--include-exports] \
@@ -164,7 +165,8 @@ clavenarctl regulatory export \
   --output bundle.tar.gz   # or '-' for stdout
 ```
 
-Window is half-open `[from, to)`. `--readme` (≤ 1 MiB) embeds operator
+Tenant resolves through flag → environment → config and is required before
+network access. Window is half-open `[from, to)`. `--readme` (≤ 1 MiB) embeds operator
 prose under `technical_documentation.md` inside the bundle; the
 ledger commits to its sha256 in the manifest. `--include-exports`
 asks the ledger to splice in `manifest.parquet_pointers` for any

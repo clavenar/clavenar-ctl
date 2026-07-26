@@ -36,6 +36,7 @@ use clap::{Args, Subcommand};
 use clavenar_sdk::{LedgerClient, RegulatoryExportOptions};
 
 use crate::ExitCode;
+use crate::config;
 
 #[derive(Debug, Args)]
 pub(crate) struct RegulatoryArgs {
@@ -63,6 +64,11 @@ pub(crate) struct VerifyArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct ExportArgs {
+    /// Tenant authorized by the operator credential. Falls back to
+    /// `CLAVENAR_TENANT`, then `default_tenant` in config.toml.
+    #[arg(long)]
+    pub tenant: Option<String>,
+
     /// Lower window bound, inclusive. RFC 3339, e.g.
     /// `2026-04-01T00:00:00Z`.
     #[arg(long)]
@@ -181,6 +187,17 @@ async fn verify(args: VerifyArgs) -> ExitCode {
 }
 
 async fn export(args: ExportArgs) -> ExitCode {
+    let cfg = match config::load() {
+        Ok(cfg) => cfg,
+        Err(error) => {
+            eprintln!("error: load config: {error}");
+            return ExitCode::Validation;
+        }
+    };
+    let tenant = match config::resolve_tenant(args.tenant.clone(), &cfg) {
+        Ok(tenant) => tenant,
+        Err(code) => return code,
+    };
     // Parse window bounds first so a typo costs no network round-trip.
     let from = match DateTime::parse_from_rfc3339(&args.from) {
         Ok(t) => t.with_timezone(&Utc),
@@ -228,6 +245,7 @@ async fn export(args: ExportArgs) -> ExitCode {
     };
 
     let opts = RegulatoryExportOptions {
+        tenant: Some(tenant),
         readme,
         include_exports: args.include_exports,
         include_compliance: args.include_compliance,
