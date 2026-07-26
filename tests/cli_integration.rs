@@ -82,3 +82,47 @@ fn top_level_help_lists_every_subcommand() {
         );
     }
 }
+
+#[test]
+fn secure_transport_profile_drives_real_mtls_before_and_after_rotation() {
+    let Ok(endpoint) = std::env::var("CLAVENAR_SECURE_TRANSPORT_ENDPOINT") else {
+        return;
+    };
+    let profile = std::env::var("CLAVENAR_SECURE_TRANSPORT_PROFILE").unwrap();
+    let cert = std::env::var("CLAVENAR_SECURE_TRANSPORT_CLIENT_CERT").unwrap();
+    let key = std::env::var("CLAVENAR_SECURE_TRANSPORT_CLIENT_KEY").unwrap();
+
+    run_secure_doctor(&endpoint, &profile);
+    std::fs::copy(
+        std::env::var("CLAVENAR_SECURE_TRANSPORT_NEXT_CERT").unwrap(),
+        &cert,
+    )
+    .unwrap();
+    std::fs::copy(
+        std::env::var("CLAVENAR_SECURE_TRANSPORT_NEXT_KEY").unwrap(),
+        &key,
+    )
+    .unwrap();
+    std::fs::copy(
+        std::env::var("CLAVENAR_SECURE_TRANSPORT_NEXT_TOKEN").unwrap(),
+        std::env::var("CLAVENAR_SECURE_TRANSPORT_TOKEN_FILE").unwrap(),
+    )
+    .unwrap();
+    run_secure_doctor(&endpoint, &profile);
+}
+
+fn run_secure_doctor(endpoint: &str, profile: &str) {
+    Command::cargo_bin("clavenarctl")
+        .unwrap()
+        .args([
+            "--transport-profile",
+            profile,
+            "doctor",
+            "--identity-url",
+            endpoint,
+            "--only-configured",
+            "--json",
+        ])
+        .assert()
+        .success();
+}
