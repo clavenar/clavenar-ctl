@@ -34,6 +34,7 @@ jobs:
           repository: clavenar/clavenar-policy-engine
           ref: ${{ github.event.client_payload.policy_engine_sha }}
           path: repos/clavenar-policy-engine
+          token: ${{ secrets.CLAVENAR_REPO_TOKEN }}
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           repository: clavenar/clavenar-lite
@@ -44,6 +45,7 @@ jobs:
         with:
           toolchain: 1.97.0
           targets: x86_64-unknown-linux-musl
+          components: rustfmt, clippy
 
       - name: Verify protected publication input
         env:
@@ -58,7 +60,7 @@ jobs:
           test "$GITHUB_ACTOR" = "vanteguardlabs"
           [[ "$RELEASE_REFERENCE" =~ ^ghcr\.io/clavenar/clavenar-stack-release@sha256:[0-9a-f]{64}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          version="$(sed -n 's/^version = "\\([^"]*\\)"/\\1/p' Cargo.toml | head -1)"
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
           test "$version" = "$COMPONENT_VERSION"
           test "$(git -C ../clavenar-sdk rev-parse HEAD)" = "$SDK_SHA"
           test "$(git -C ../clavenar-chaos-catalog rev-parse HEAD)" = \
