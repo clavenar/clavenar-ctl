@@ -40,6 +40,11 @@ jobs:
           repository: clavenar/clavenar-lite
           ref: ${{ github.event.client_payload.lite_sha }}
           path: repos/clavenar-lite
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: clavenar/clavenar-specs
+          ref: ${{ github.event.client_payload.specs_sha }}
+          path: repos/clavenar-specs
 
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
@@ -55,6 +60,7 @@ jobs:
           POLICY_ENGINE_SHA: ${{ github.event.client_payload.policy_engine_sha }}
           RELEASE_REFERENCE: ${{ github.event.client_payload.release_reference }}
           SDK_SHA: ${{ github.event.client_payload.sdk_sha }}
+          SPECS_SHA: ${{ github.event.client_payload.specs_sha }}
           SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
         run: |
           test "$GITHUB_ACTOR" = "vanteguardlabs"
@@ -68,6 +74,7 @@ jobs:
           test "$(git -C ../clavenar-policy-engine rev-parse HEAD)" = \
             "$POLICY_ENGINE_SHA"
           test "$(git -C ../clavenar-lite rev-parse HEAD)" = "$LITE_SHA"
+          test "$(git -C ../clavenar-specs rev-parse HEAD)" = "$SPECS_SHA"
 
       - run: cargo fmt --all -- --check
       - run: cargo test --locked
