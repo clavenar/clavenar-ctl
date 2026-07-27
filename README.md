@@ -177,11 +177,17 @@ Ledger URL precedence: flag → `CLAVENAR_LEDGER_URL` env → `http://localhost:
 ## Install
 
 ```sh
-cargo install --path .                       # from a local checkout
-cargo install --git https://github.com/clavenar/clavenar-ctl  # from source
+mkdir clavenar-source && cd clavenar-source
+git clone https://github.com/clavenar/clavenar-sdk.git
+git clone https://github.com/clavenar/clavenar-chaos-catalog.git
+git clone https://github.com/clavenar/clavenar-ctl.git
+cd clavenar-ctl
+cargo install --locked --path .
 ```
 
-The binary lands as `~/.cargo/bin/clavenarctl`.
+The exact released source graph includes the CLI's sibling Rust crates, so the
+workspace checkout is required. The binary lands as
+`~/.cargo/bin/clavenarctl`.
 
 ## Auth
 
