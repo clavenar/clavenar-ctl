@@ -8,8 +8,8 @@ external integrators), this binary is the human-facing CLI.
 Naming follows the kubectl pattern: the **crate / repo** is `clavenar-ctl`
 (matches the `clavenar-*` family — `clavenar-identity`, `clavenar-sdk`,
 `clavenar-hil`, …); the **binary** is `clavenarctl` (single word,
-typed-on-the-command-line every day). After `cargo install clavenar-ctl`
-you run `clavenarctl ...`.
+typed-on-the-command-line every day). Install the exact protected release
+binary below, then run `clavenarctl ...`.
 
 Sequence diagrams for the five primary subcommands — `auth login`,
 `agents <lifecycle-verb>`, `agents create --if-absent`,
@@ -178,11 +178,14 @@ Ledger URL precedence: flag → `CLAVENAR_LEDGER_URL` env → `http://localhost:
 
 ```sh
 mkdir clavenar-source && cd clavenar-source
-git clone https://github.com/clavenar/clavenar-sdk.git
-git clone https://github.com/clavenar/clavenar-chaos-catalog.git
-git clone https://github.com/clavenar/clavenar-ctl.git
-cd clavenar-ctl
-cargo install --locked --path .
+V=0.3.0
+curl -fsSLO \
+  "https://github.com/clavenar/clavenar-ctl/releases/download/v${V}/clavenarctl-${V}-x86_64-linux-musl.tar.gz"
+curl -fsSLO \
+  "https://github.com/clavenar/clavenar-ctl/releases/download/v${V}/clavenarctl-${V}-x86_64-linux-musl.tar.gz.sha256"
+sha256sum -c "clavenarctl-${V}-x86_64-linux-musl.tar.gz.sha256"
+tar -xzf "clavenarctl-${V}-x86_64-linux-musl.tar.gz"
+install -m 0755 clavenarctl "$HOME/.local/bin/clavenarctl"
 ```
 
 The exact released source graph includes the CLI's sibling Rust crates, so the

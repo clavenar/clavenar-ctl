@@ -1,0 +1,106 @@
+name: release
+run-name: publish ${{ github.event.client_payload.publication_id }}
+
+on:
+  repository_dispatch:
+    types: [clavenar-protected-publication]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: repos/clavenar-ctl
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.client_payload.source_sha }}
+          path: repos/clavenar-ctl
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: clavenar/clavenar-sdk
+          ref: ${{ github.event.client_payload.sdk_sha }}
+          path: repos/clavenar-sdk
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: clavenar/clavenar-chaos-catalog
+          ref: ${{ github.event.client_payload.chaos_catalog_sha }}
+          path: repos/clavenar-chaos-catalog
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: clavenar/clavenar-policy-engine
+          ref: ${{ github.event.client_payload.policy_engine_sha }}
+          path: repos/clavenar-policy-engine
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: clavenar/clavenar-lite
+          ref: ${{ github.event.client_payload.lite_sha }}
+          path: repos/clavenar-lite
+
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: 1.97.0
+          targets: x86_64-unknown-linux-musl
+
+      - name: Verify protected publication input
+        env:
+          CHAOS_CATALOG_SHA: ${{ github.event.client_payload.chaos_catalog_sha }}
+          COMPONENT_VERSION: ${{ github.event.client_payload.component_version }}
+          LITE_SHA: ${{ github.event.client_payload.lite_sha }}
+          POLICY_ENGINE_SHA: ${{ github.event.client_payload.policy_engine_sha }}
+          RELEASE_REFERENCE: ${{ github.event.client_payload.release_reference }}
+          SDK_SHA: ${{ github.event.client_payload.sdk_sha }}
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+        run: |
+          test "$GITHUB_ACTOR" = "vanteguardlabs"
+          [[ "$RELEASE_REFERENCE" =~ ^ghcr\.io/clavenar/clavenar-stack-release@sha256:[0-9a-f]{64}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          version="$(sed -n 's/^version = "\\([^"]*\\)"/\\1/p' Cargo.toml | head -1)"
+          test "$version" = "$COMPONENT_VERSION"
+          test "$(git -C ../clavenar-sdk rev-parse HEAD)" = "$SDK_SHA"
+          test "$(git -C ../clavenar-chaos-catalog rev-parse HEAD)" = \
+            "$CHAOS_CATALOG_SHA"
+          test "$(git -C ../clavenar-policy-engine rev-parse HEAD)" = \
+            "$POLICY_ENGINE_SHA"
+          test "$(git -C ../clavenar-lite rev-parse HEAD)" = "$LITE_SHA"
+
+      - run: cargo fmt --all -- --check
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Build the static CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          cargo build --release --locked --target x86_64-unknown-linux-musl
+          binary="target/x86_64-unknown-linux-musl/release/clavenarctl"
+          if ldd "$binary" 2>&1 | grep -qE '=>'; then
+            echo "::error::binary is not statically linked"
+            exit 1
+          fi
+          version="${{ github.event.client_payload.component_version }}"
+          asset="clavenarctl-$version-x86_64-linux-musl.tar.gz"
+          tar -czf "$asset" -C "$(dirname "$binary")" "$(basename "$binary")"
+          sha256sum "$asset" > "$asset.sha256"
+          echo "asset=$asset" >> "$GITHUB_ENV"
+
+      - name: Publish the exact source tag and binary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ github.event.client_payload.component_version }}
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" \
+              --jq '.object.sha')" = "$SOURCE_SHA"
+            gh release upload "$tag" "$asset" "$asset.sha256" --clobber
+          else
+            gh release create "$tag" --target "$SOURCE_SHA" \
+              --title "$tag — clavenarctl" \
+              --notes "Published from the accepted protected Clavenar release." \
+              "$asset" "$asset.sha256"
+          fi
