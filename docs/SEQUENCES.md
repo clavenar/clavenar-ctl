@@ -346,7 +346,9 @@ sequenceDiagram
 - The chaos catalog half is wired through a path-dep on
   `clavenar-console`'s `clavenar-chaos-catalog`. The CLI implements a
   minimal catalog wrapper inline so the binary stays light; the
-  catalog itself is the same 40-attack corpus the console renders.
+  CLI replay input is the separately scoped six-case policy fingerprint; the
+  exact 93-scenario shipped attack catalog is governed by
+  `clavenar.attack-release/v1` and is not reimplemented here.
 - `--fail-on-regression` exits 2 (Validation), not 5 (Server) —
   a regression is "your candidate is wrong," not "the platform
   failed." CI matrices keying off exit codes can treat regression

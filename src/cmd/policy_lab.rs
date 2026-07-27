@@ -36,6 +36,9 @@ use clavenar_sdk::{
 
 use crate::ExitCode;
 
+const CURATED_POLICY_RELEASE_MANIFEST: &str =
+    include_str!("../../../clavenar-specs/contracts/curated-policy-release-v1.fixture.json");
+
 #[derive(Debug, Args)]
 pub(crate) struct PolicyArgs {
     #[command(subcommand)]
@@ -45,9 +48,9 @@ pub(crate) struct PolicyArgs {
 #[derive(Debug, Subcommand)]
 pub(crate) enum PolicyAction {
     /// Replay a candidate Rego rule against the last N days of real
-    /// ledger traffic AND against the chaos catalog (the 40-attack
-    /// catalogued corpus). Reports the per-input verdict diff and
-    /// flags regressions in the catalog tab.
+    /// ledger traffic and the separately scoped six-case CLI policy
+    /// fingerprint. Reports the per-input verdict diff and flags
+    /// regressions in the catalog tab.
     Test(TestArgs),
     /// Mine the last N days of ledger traffic for recurring patterns
     /// and surface candidate Rego rules. Each candidate carries a
@@ -73,6 +76,8 @@ pub(crate) enum PolicyAction {
     /// Uninstall (deactivate) a policy by name, or every policy in a
     /// category. The protected baseline floor is left untouched.
     Uninstall(crate::cmd::policy_install::InstallArgs),
+    /// Emit the exact versioned 85-policy curated-release manifest.
+    ReleaseManifest,
 }
 
 #[derive(Debug, Args)]
@@ -221,6 +226,10 @@ pub(crate) async fn run(args: PolicyArgs) -> ExitCode {
         PolicyAction::Exchange(a) => crate::cmd::policy_exchange::run(a).await,
         PolicyAction::Install(a) => crate::cmd::policy_install::run(a, /*activate=*/ true).await,
         PolicyAction::Uninstall(a) => crate::cmd::policy_install::run(a, /*activate=*/ false).await,
+        PolicyAction::ReleaseManifest => {
+            print!("{CURATED_POLICY_RELEASE_MANIFEST}");
+            ExitCode::Ok
+        }
     }
 }
 
@@ -971,4 +980,41 @@ fn surface_mine_error(err: ClavenarError) -> ExitCode {
     }
     eprintln!("error: miner request failed: {}", err);
     ExitCode::from_clavenar_error(&err)
+}
+
+#[cfg(test)]
+mod release_manifest_tests {
+    use super::*;
+
+    #[test]
+    fn curated_policy_release_manifest_reconciles_cli_counts() {
+        let manifest: serde_json::Value =
+            serde_json::from_str(CURATED_POLICY_RELEASE_MANIFEST).expect("valid manifest");
+        let baseline = manifest["crossCuttingBaseline"]["policyIds"]
+            .as_array()
+            .expect("baseline");
+        let families = manifest["industryFamilies"].as_array().expect("families");
+        let industry = families
+            .iter()
+            .map(|family| family["policyIds"].as_array().expect("policyIds").len())
+            .sum::<usize>();
+        assert_eq!(
+            baseline.len(),
+            manifest["totals"]["crossCuttingBaselinePolicies"]
+                .as_u64()
+                .expect("baseline total") as usize
+        );
+        assert_eq!(
+            industry,
+            manifest["totals"]["industryPolicies"]
+                .as_u64()
+                .expect("industry total") as usize
+        );
+        assert_eq!(
+            baseline.len() + industry,
+            manifest["totals"]["curatedPolicies"]
+                .as_u64()
+                .expect("curated total") as usize
+        );
+    }
 }
