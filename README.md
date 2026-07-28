@@ -177,15 +177,15 @@ Ledger URL precedence: flag → `CLAVENAR_LEDGER_URL` env → `http://localhost:
 ## Install
 
 The release archive naming template is
-`clavenarctl-${V}-x86_64-linux-musl` with `V=0.3.0`. The expanded,
+`clavenarctl-${V}-x86_64-linux-musl` with `V=0.3.1`. The expanded,
 copy-pasteable install is:
 
 ```sh
 mkdir clavenar-source && cd clavenar-source
-curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.0/clavenarctl-0.3.0-x86_64-linux-musl.tar.gz
-curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.0/clavenarctl-0.3.0-x86_64-linux-musl.tar.gz.sha256
-sha256sum -c clavenarctl-0.3.0-x86_64-linux-musl.tar.gz.sha256
-tar -xzf clavenarctl-0.3.0-x86_64-linux-musl.tar.gz
+curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.1/clavenarctl-0.3.1-x86_64-linux-musl.tar.gz
+curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.1/clavenarctl-0.3.1-x86_64-linux-musl.tar.gz.sha256
+sha256sum -c clavenarctl-0.3.1-x86_64-linux-musl.tar.gz.sha256
+tar -xzf clavenarctl-0.3.1-x86_64-linux-musl.tar.gz
 install -m 0755 clavenarctl "$HOME/.local/bin/clavenarctl"
 ```
 

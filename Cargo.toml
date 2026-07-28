@@ -5,7 +5,7 @@
 # `kubernetes` repo — so the operator UX in clavenar-specs/TECH_SPEC.md#agent-onboarding-wao §9 reads
 # verbatim as the command line.
 name = "clavenar-ctl"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 authors = ["Vanteguard Labs <vanteguardlabs@gmail.com>"]
 description = "Operator CLI for Clavenar — register agents, drive lifecycle, and verify the chain."
