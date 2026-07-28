@@ -113,7 +113,15 @@ jobs:
               --jq '.object.sha')" = "$SOURCE_SHA"
             gh release upload "$tag" "$asset" "$asset.sha256" --clobber
           else
-            gh release create "$tag" --target "$SOURCE_SHA" \
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+              test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" \
+                --jq '.object.sha')" = "$SOURCE_SHA"
+            else
+              gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+                -f ref="refs/tags/$tag" \
+                -f sha="$SOURCE_SHA" >/dev/null
+            fi
+            gh release create "$tag" \
               --title "$tag — clavenarctl" \
               --notes "Published from the accepted protected Clavenar release." \
               "$asset" "$asset.sha256"
