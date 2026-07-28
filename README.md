@@ -178,10 +178,13 @@ Ledger URL precedence: flag → `CLAVENAR_LEDGER_URL` env → `http://localhost:
 
 ```sh
 mkdir clavenar-source && cd clavenar-source
-curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.0/clavenarctl-0.3.0-x86_64-linux-musl.tar.gz
-curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.0/clavenarctl-0.3.0-x86_64-linux-musl.tar.gz.sha256
-sha256sum -c clavenarctl-0.3.0-x86_64-linux-musl.tar.gz.sha256
-tar -xzf clavenarctl-0.3.0-x86_64-linux-musl.tar.gz
+V=0.3.0
+curl -fsSLO \
+  "https://github.com/clavenar/clavenar-ctl/releases/download/v${V}/clavenarctl-${V}-x86_64-linux-musl.tar.gz"
+curl -fsSLO \
+  "https://github.com/clavenar/clavenar-ctl/releases/download/v${V}/clavenarctl-${V}-x86_64-linux-musl.tar.gz.sha256"
+sha256sum -c "clavenarctl-${V}-x86_64-linux-musl.tar.gz.sha256"
+tar -xzf "clavenarctl-${V}-x86_64-linux-musl.tar.gz"
 install -m 0755 clavenarctl "$HOME/.local/bin/clavenarctl"
 ```
 
