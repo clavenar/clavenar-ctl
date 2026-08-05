@@ -1,5 +1,6 @@
 //! Process-wide secure transport profile shared by every CLI command.
 
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -146,6 +147,54 @@ pub(crate) fn client() -> reqwest::Client {
         },
         |provider| provider.client().as_ref().clone(),
     )
+}
+
+/// Build the one legacy flag-driven mTLS client used by CLI commands that
+/// have not moved to a transport-profile-only interface yet. Keeping PEM
+/// parsing, proxy posture, deadlines, and explicit DNS pinning here prevents
+/// command implementations from silently drifting apart.
+pub(crate) fn mtls_client_from_files(
+    client_certificate: &Path,
+    private_key: &Path,
+    ca_bundle: &Path,
+    insecure: bool,
+    request_timeout: Duration,
+    resolve: &[(String, SocketAddr)],
+) -> Result<reqwest::Client, String> {
+    if request_timeout.is_zero() {
+        return Err("request timeout must be non-zero".into());
+    }
+    let certificate = std::fs::read(client_certificate)
+        .map_err(|error| format!("read client cert {}: {error}", client_certificate.display()))?;
+    let key = std::fs::read(private_key)
+        .map_err(|error| format!("read client key {}: {error}", private_key.display()))?;
+    let ca = std::fs::read(ca_bundle)
+        .map_err(|error| format!("read CA bundle {}: {error}", ca_bundle.display()))?;
+    let mut identity_pem = certificate;
+    if !identity_pem.ends_with(b"\n") {
+        identity_pem.push(b'\n');
+    }
+    identity_pem.extend_from_slice(&key);
+    let identity = reqwest::Identity::from_pem(&identity_pem)
+        .map_err(|error| format!("invalid client identity PEM: {error}"))?;
+    let ca = reqwest::Certificate::from_pem(&ca)
+        .map_err(|error| format!("invalid CA bundle PEM: {error}"))?;
+    let mut builder = reqwest::Client::builder()
+        .use_rustls_tls()
+        .identity(identity)
+        .add_root_certificate(ca)
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(request_timeout)
+        .no_proxy();
+    for (name, addresses) in resolve {
+        builder = builder.resolve_to_addrs(name, &[*addresses]);
+    }
+    if insecure {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    builder
+        .build()
+        .map_err(|error| format!("build mTLS client: {error}"))
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::{Args, ValueEnum};
-use reqwest::{Certificate, Client, Identity};
+use reqwest::Client;
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -236,23 +236,15 @@ async fn build_client(args: &McpBridgeArgs) -> anyhow::Result<Client> {
     if let Some(client) = crate::transport::secure_client() {
         return Ok(client);
     }
-    let cert_pem = tokio::fs::read(&args.cert).await?;
-    let key_pem = tokio::fs::read(&args.key).await?;
-    let ca_pem = tokio::fs::read(&args.ca).await?;
-
-    let identity_pem = [cert_pem.as_slice(), b"\n", key_pem.as_slice()].concat();
-    let identity = Identity::from_pem(&identity_pem)?;
-    let ca = Certificate::from_pem(&ca_pem)?;
-
-    let mut builder = Client::builder()
-        .use_rustls_tls()
-        .identity(identity)
-        .add_root_certificate(ca)
-        .timeout(Duration::from_secs(args.timeout_secs));
-    if args.insecure {
-        builder = builder.danger_accept_invalid_certs(true);
-    }
-    Ok(builder.build()?)
+    crate::transport::mtls_client_from_files(
+        &args.cert,
+        &args.key,
+        &args.ca,
+        args.insecure,
+        Duration::from_secs(args.timeout_secs),
+        &[],
+    )
+    .map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]

@@ -1,10 +1,9 @@
 //! `clavenarctl policy exchange {sign,install}` — signed governance
 //! packs with a mandatory local backtest gate.
 //!
-//! `sign` walks a directory of `*.rego` files, builds a `pack.json`
-//! manifest committing to each file's sha256, signs the manifest digest
-//! via clavenar-identity's `/sign/blob` (audience `policy-pack`), and
-//! writes `pack.json` + `pack.sig`.
+//! `sign` is currently disabled fail-closed. Identity's `/sign/blob`
+//! capability is intentionally ledger-only; policy packs need their own
+//! versioned binding before the CLI can safely request signatures.
 //!
 //! `install` is fail-closed: it (1) re-hashes each file against the
 //! manifest, (2) verifies the detached Ed25519 signature against the
@@ -21,9 +20,8 @@ use clap::{Args, Subcommand};
 use clavenar_chaos_catalog::catalog_policy_inputs;
 use clavenar_sdk::{
     BatchMode, CreatePolicyRequest, DiffClass, EvaluateBatchRequest, PACK_MANIFEST_FILENAME,
-    PACK_MANIFEST_SCHEMA_VERSION, PACK_SIGNATURE_SIDECAR, PackEntry, PackManifest,
-    PackSignatureRef, PackSigner, PackVerifyOutcome, PoliciesClient, VerifyingKey, verify_pack,
-    verifying_key_from_jwks, verifying_key_from_pem,
+    PACK_SIGNATURE_SIDECAR, PackEntry, PackManifest, PackVerifyOutcome, PoliciesClient,
+    VerifyingKey, verify_pack, verifying_key_from_jwks, verifying_key_from_pem,
 };
 use sha2::{Digest, Sha256};
 
@@ -38,8 +36,8 @@ pub(crate) struct ExchangeArgs {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ExchangeAction {
-    /// Sign a pack directory: hash each `.rego`, build `pack.json`, sign
-    /// the manifest via identity, write `pack.json` + `pack.sig`.
+    /// Reserved for a future dedicated identity.sign.policy-pack capability.
+    #[command(hide = true)]
     Sign(SignArgs),
     /// Verify + backtest + install a signed pack into the policy-engine.
     Install(InstallArgs),
@@ -137,83 +135,17 @@ fn read_pack_dir(dir: &Path) -> Result<(Vec<PackEntry>, Vec<String>), String> {
 }
 
 async fn sign(args: SignArgs) -> ExitCode {
-    let (entries, _bodies) = match read_pack_dir(&args.pack_dir) {
-        Ok(v) => v,
-        Err(msg) => {
-            eprintln!("error: {msg}");
-            return ExitCode::Validation;
-        }
-    };
-    let name = args.name.unwrap_or_else(|| {
-        args.pack_dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("pack")
-            .to_string()
-    });
-
-    let mut manifest = PackManifest {
-        schema_version: PACK_MANIFEST_SCHEMA_VERSION.to_string(),
-        name,
-        version: args.version,
-        entries,
-        generated_at: chrono::Utc::now(),
-        signature: None,
-    };
-
-    let digest = match manifest.digest_hex() {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("error: canonicalize manifest: {e}");
-            return ExitCode::Server;
-        }
-    };
-
-    let signer = PackSigner::new(args.identity_url, args.caller_spiffe);
-    let sig = match signer.sign(&digest).await {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("error: sign via identity: {e}");
-            return ExitCode::Server;
-        }
-    };
-    if sig.algorithm != "ed25519" || sig.signature_hex.len() != 128 {
-        eprintln!(
-            "error: identity returned unexpected signature (alg={}, {} hex chars)",
-            sig.algorithm,
-            sig.signature_hex.len()
-        );
-        return ExitCode::Server;
-    }
-    manifest.signature = Some(PackSignatureRef {
-        sidecar: PACK_SIGNATURE_SIDECAR.to_string(),
-        algorithm: "ed25519".to_string(),
-        digest_alg: "sha256".to_string(),
-        key_id: sig.key_id,
-        signed_at: sig.signed_at,
-    });
-
-    let manifest_bytes = match serde_json::to_vec_pretty(&manifest) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("error: serialize manifest: {e}");
-            return ExitCode::Server;
-        }
-    };
-    let manifest_path = args.pack_dir.join(PACK_MANIFEST_FILENAME);
-    let sig_path = args.pack_dir.join(PACK_SIGNATURE_SIDECAR);
-    if let Err(e) = std::fs::write(&manifest_path, &manifest_bytes) {
-        eprintln!("error: write {}: {e}", manifest_path.display());
-        return ExitCode::Server;
-    }
-    if let Err(e) = std::fs::write(&sig_path, format!("{}\n", sig.signature_hex)) {
-        eprintln!("error: write {}: {e}", sig_path.display());
-        return ExitCode::Server;
-    }
-    eprintln!("signed pack '{}' v{}", manifest.name, manifest.version);
-    eprintln!("wrote {}", manifest_path.display());
-    eprintln!("wrote {}", sig_path.display());
-    ExitCode::Ok
+    let _ = (
+        args.pack_dir,
+        args.name,
+        args.version,
+        args.identity_url,
+        args.caller_spiffe,
+    );
+    eprintln!(
+        "error: policy-pack signing is disabled: identity /sign/blob is ledger-only; a dedicated identity.sign.policy-pack capability and versioned request binding must be deployed first"
+    );
+    ExitCode::Validation
 }
 
 async fn install(args: InstallArgs) -> ExitCode {

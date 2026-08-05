@@ -12,13 +12,14 @@
 //! correct. The catalog observes only the proxy verdict, never the
 //! agent's internal handling.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Args;
-use clavenar_chaos_catalog::{Attack, Category, catalog};
+use clavenar_chaos_catalog::{Attack, Category, Expected, Mode, catalog};
 use clavenar_sdk::{CertificationCase, CertificationRequest};
-use reqwest::{Certificate, Client, Identity};
+use reqwest::{Client, StatusCode};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::cmd::agents::build_client;
@@ -26,6 +27,19 @@ use crate::{ExitCode, config};
 
 /// Proxy MCP endpoint used when neither the flag nor the env var is set.
 const DEFAULT_PROXY_URL: &str = "https://localhost:8443/mcp";
+const MAX_CERTIFICATION_RESPONSE_BYTES: usize = 1024 * 1024;
+
+#[derive(Debug, Deserialize)]
+struct RejectionEnvelope {
+    verdict: String,
+    layer: String,
+    error: String,
+    #[serde(default)]
+    reasons: Vec<String>,
+    #[serde(default)]
+    review_reasons: Vec<String>,
+    correlation_id: String,
+}
 
 #[derive(Debug, Args)]
 pub(crate) struct CertifyArgs {
@@ -116,13 +130,12 @@ pub(crate) async fn run(args: CertifyArgs, cfg: &config::Config, url: &str) -> E
         let (observed, passed) = match req.send().await {
             Ok(resp) => {
                 let status = resp.status();
-                let text = resp.text().await.unwrap_or_default();
-                // Mirror the chaos runner: HTTP 200 is the only ALLOW;
-                // every non-2xx is "the boundary refused this probe."
-                if status.is_success() {
-                    (format!("ALLOWED ({})", status.as_u16()), false)
-                } else {
-                    (observed_reason(status.as_u16(), &text), true)
+                match read_bounded_text(resp, MAX_CERTIFICATION_RESPONSE_BYTES).await {
+                    Ok(text) => classify_probe_response(attack, status, &text),
+                    Err(error) => (
+                        format!("INVALID RESPONSE ({}) {error}", status.as_u16()),
+                        false,
+                    ),
                 }
             }
             Err(e) => {
@@ -207,28 +220,20 @@ pub(crate) async fn run(args: CertifyArgs, cfg: &config::Config, url: &str) -> E
 }
 
 /// Build an mTLS reqwest client from `client.crt` / `client.key` /
-/// `ca.crt` in `dir`. Mirrors `mcp_bridge::build_client`.
-async fn build_mtls_client(dir: &Path, insecure: bool) -> anyhow::Result<Client> {
+/// `ca.crt` in `dir` through the process-wide CLI transport factory.
+async fn build_mtls_client(dir: &std::path::Path, insecure: bool) -> anyhow::Result<Client> {
     if let Some(client) = crate::transport::secure_client() {
         return Ok(client);
     }
-    let cert_pem = tokio::fs::read(dir.join("client.crt")).await?;
-    let key_pem = tokio::fs::read(dir.join("client.key")).await?;
-    let ca_pem = tokio::fs::read(dir.join("ca.crt")).await?;
-
-    let identity_pem = [cert_pem.as_slice(), b"\n", key_pem.as_slice()].concat();
-    let identity = Identity::from_pem(&identity_pem)?;
-    let ca = Certificate::from_pem(&ca_pem)?;
-
-    let mut builder = Client::builder()
-        .use_rustls_tls()
-        .identity(identity)
-        .add_root_certificate(ca)
-        .timeout(Duration::from_secs(30));
-    if insecure {
-        builder = builder.danger_accept_invalid_certs(true);
-    }
-    Ok(builder.build()?)
+    crate::transport::mtls_client_from_files(
+        &dir.join("client.crt"),
+        &dir.join("client.key"),
+        &dir.join("ca.crt"),
+        insecure,
+        Duration::from_secs(30),
+        &[],
+    )
+    .map_err(anyhow::Error::msg)
 }
 
 /// Stable fingerprint of the scoped catalog the gauntlet ran — pins
@@ -236,25 +241,203 @@ async fn build_mtls_client(dir: &Path, insecure: bool) -> anyhow::Result<Client>
 /// catalog reproduces it; a catalog change (added/removed/recategorized
 /// attack) shifts the digest.
 fn catalog_fingerprint(attacks: &[Attack]) -> String {
-    let mut lines: Vec<String> = attacks
+    let mut scenarios: Vec<serde_json::Value> = attacks
         .iter()
-        .map(|a| format!("{}|{}|{}", a.id, a.category.as_str(), a.description))
+        .map(|attack| {
+            let expected = match &attack.expected {
+                Expected::Allow => serde_json::json!({"kind": "allow"}),
+                Expected::Deny { reason_keywords } => {
+                    serde_json::json!({"kind": "deny", "reasonKeywords": reason_keywords})
+                }
+                Expected::BusinessHoursConditional { reason_keywords } => serde_json::json!({
+                    "kind": "businessHoursConditional",
+                    "reasonKeywords": reason_keywords,
+                }),
+            };
+            let mode = match attack.mode {
+                Mode::Single => serde_json::json!({"kind": "single"}),
+                Mode::Burst { count } => serde_json::json!({"kind": "burst", "count": count}),
+                Mode::SingleWithHil(side) => {
+                    serde_json::json!({"kind": "singleWithHil", "side": format!("{side:?}")})
+                }
+                Mode::MultiTurn { primers } => {
+                    serde_json::json!({"kind": "multiTurn", "primerCount": primers.len()})
+                }
+            };
+            let mut headers = attack.build_headers();
+            headers.sort();
+            let rejection = attack.rejection_contract().map(|contract| {
+                serde_json::json!({
+                    "status": contract.status,
+                    "verdict": contract.verdict,
+                    "layer": contract.layer,
+                })
+            });
+            serde_json::json!({
+                "id": attack.id,
+                "category": attack.category.as_str(),
+                "description": attack.description,
+                "expected": expected,
+                "mode": mode,
+                "payload": attack.build_payload(1),
+                "headers": headers,
+                "rejection": rejection,
+            })
+        })
         .collect();
-    lines.sort();
+    scenarios.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
     let mut h = Sha256::new();
-    h.update(lines.join("\n").as_bytes());
+    h.update(serde_json::to_vec(&scenarios).expect("JSON values always serialize"));
     hex::encode(h.finalize())
 }
 
-/// Compact, single-line observed reason for a denied probe — status +
-/// the first line of the body, trimmed so a verbose JSON-RPC error
-/// doesn't bloat the certificate.
-fn observed_reason(status: u16, body: &str) -> String {
-    let first = body.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
-    let trimmed: String = first.trim().chars().take(200).collect();
-    if trimmed.is_empty() {
-        format!("DENIED ({status})")
+async fn read_bounded_text(
+    mut response: reqwest::Response,
+    limit: usize,
+) -> Result<String, String> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return Err(format!("body exceeds {limit} bytes"));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| format!("body read failed: {error}"))?
+    {
+        if body.len().saturating_add(chunk.len()) > limit {
+            return Err(format!("body exceeds {limit} bytes"));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    String::from_utf8(body).map_err(|_| "body is not UTF-8".to_string())
+}
+
+fn classify_probe_response(attack: &Attack, status: StatusCode, body: &str) -> (String, bool) {
+    let Some(contract) = attack.rejection_contract() else {
+        return ("INVALID CATALOG: missing rejection contract".into(), false);
+    };
+    if status.as_u16() != contract.status {
+        return (
+            format!(
+                "UNEXPECTED HTTP {} (expected {})",
+                status.as_u16(),
+                contract.status
+            ),
+            false,
+        );
+    }
+    let envelope: RejectionEnvelope = match serde_json::from_str(body) {
+        Ok(envelope) => envelope,
+        Err(error) => return (format!("MALFORMED REJECTION ({status}) {error}"), false),
+    };
+    let reason = std::iter::once(envelope.error.as_str())
+        .chain(envelope.reasons.iter().map(String::as_str))
+        .chain(envelope.review_reasons.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join(" | ");
+    let keywords = match &attack.expected {
+        Expected::Deny { reason_keywords }
+        | Expected::BusinessHoursConditional { reason_keywords } => reason_keywords,
+        Expected::Allow => {
+            return (
+                "INVALID CATALOG: certification probe expects allow".into(),
+                false,
+            );
+        }
+    };
+    let valid_correlation = uuid::Uuid::parse_str(&envelope.correlation_id)
+        .is_ok_and(|id| id.get_version_num() == 5 && id.get_variant() == uuid::Variant::RFC4122);
+    let passed = envelope.verdict == contract.verdict
+        && envelope.layer == contract.layer
+        && !envelope.error.trim().is_empty()
+        && keywords.iter().any(|keyword| reason.contains(keyword))
+        && valid_correlation;
+    let observed = format!(
+        "HTTP {} verdict={} layer={} reason={}",
+        status.as_u16(),
+        envelope.verdict,
+        envelope.layer,
+        reason.chars().take(160).collect::<String>()
+    );
+    if passed {
+        (observed, true)
     } else {
-        format!("DENIED ({status}) {trimmed}")
+        (format!("CONTRACT MISMATCH: {observed}"), false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn certification_attack(id: &str) -> Attack {
+        catalog()
+            .into_iter()
+            .find(|attack| attack.id == id)
+            .expect("certification attack exists")
+    }
+
+    fn exact_body(attack: &Attack) -> String {
+        let contract = attack.rejection_contract().unwrap();
+        let keyword = match &attack.expected {
+            Expected::Deny { reason_keywords } => reason_keywords[0],
+            _ => unreachable!(),
+        };
+        serde_json::json!({
+            "verdict": contract.verdict,
+            "layer": contract.layer,
+            "error": keyword,
+            "reasons": [],
+            "correlation_id": "123e4567-e89b-52d3-a456-426614174000",
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn exact_catalog_rejection_passes() {
+        let attack = certification_attack("agent_cert_malformed_mcp");
+        let contract = attack.rejection_contract().unwrap();
+        assert!(
+            classify_probe_response(
+                &attack,
+                StatusCode::from_u16(contract.status).unwrap(),
+                &exact_body(&attack),
+            )
+            .1
+        );
+    }
+
+    #[test]
+    fn auth_throttle_server_and_malformed_responses_fail() {
+        let attack = certification_attack("agent_cert_malformed_mcp");
+        for (status, body) in [
+            (StatusCode::UNAUTHORIZED, r#"{"error":"unauthorized"}"#),
+            (StatusCode::TOO_MANY_REQUESTS, r#"{"error":"rate_limited"}"#),
+            (StatusCode::INTERNAL_SERVER_ERROR, r#"{"error":"failed"}"#),
+            (StatusCode::BAD_REQUEST, "not-json"),
+        ] {
+            assert!(!classify_probe_response(&attack, status, body).1);
+        }
+    }
+
+    #[test]
+    fn wrong_layer_or_correlation_fails() {
+        let attack = certification_attack("agent_cert_malformed_mcp");
+        let mut body: serde_json::Value = serde_json::from_str(&exact_body(&attack)).unwrap();
+        body["layer"] = serde_json::json!("identity");
+        assert!(!classify_probe_response(&attack, StatusCode::BAD_REQUEST, &body.to_string()).1);
+        body["layer"] = serde_json::json!("gateway");
+        body["correlation_id"] = serde_json::json!("not-a-uuid");
+        assert!(!classify_probe_response(&attack, StatusCode::BAD_REQUEST, &body.to_string()).1);
+    }
+
+    #[test]
+    fn fingerprint_changes_with_payload_and_contract_semantics() {
+        let attacks = vec![certification_attack("agent_cert_malformed_mcp")];
+        let other = vec![certification_attack("agent_cert_poisoned_result")];
+        assert_ne!(catalog_fingerprint(&attacks), catalog_fingerprint(&other));
     }
 }

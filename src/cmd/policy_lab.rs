@@ -23,7 +23,6 @@
 //! token: `CLAVENAR_POLICY_TEST_BEARER` (optional — for the prod
 //! deployment that fronts the policy engine with token auth).
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use chrono::{DateTime, Duration as CDuration, Utc};
@@ -591,11 +590,6 @@ fn catalog_inputs() -> Vec<serde_json::Value> {
     v
 }
 
-#[allow(dead_code)]
-fn unused_to_keep_btreemap_import() -> BTreeMap<&'static str, &'static str> {
-    BTreeMap::new()
-}
-
 // ── `clavenarctl policy learn` ──────────────────────────────────────────
 
 async fn run_learn(args: LearnArgs) -> ExitCode {
@@ -926,34 +920,15 @@ pub(crate) fn build_mtls_client(
     }
     match (cert, key, ca) {
         (None, None, None) => Ok(None),
-        (Some(cert), Some(key), Some(ca)) => {
-            let cert_pem = std::fs::read(cert)
-                .map_err(|e| format!("read client cert {}: {}", cert.display(), e))?;
-            let key_pem = std::fs::read(key)
-                .map_err(|e| format!("read client key {}: {}", key.display(), e))?;
-            let ca_pem =
-                std::fs::read(ca).map_err(|e| format!("read ca cert {}: {}", ca.display(), e))?;
-            let mut combined = cert_pem.clone();
-            if !combined.ends_with(b"\n") {
-                combined.push(b'\n');
-            }
-            combined.extend_from_slice(&key_pem);
-            let identity = reqwest::Identity::from_pem(&combined)
-                .map_err(|e| format!("invalid client identity PEM: {}", e))?;
-            let ca_cert = reqwest::Certificate::from_pem(&ca_pem)
-                .map_err(|e| format!("invalid CA cert PEM: {}", e))?;
-            let mut builder = reqwest::Client::builder()
-                .use_rustls_tls()
-                .identity(identity)
-                .add_root_certificate(ca_cert);
-            for (name, addr) in resolve {
-                builder = builder.resolve_to_addrs(name, &[*addr]);
-            }
-            let client = builder
-                .build()
-                .map_err(|e| format!("build mtls client: {}", e))?;
-            Ok(Some(client))
-        }
+        (Some(cert), Some(key), Some(ca)) => crate::transport::mtls_client_from_files(
+            cert,
+            key,
+            ca,
+            false,
+            std::time::Duration::from_secs(30),
+            resolve,
+        )
+        .map(Some),
         _ => Err(
             "--client-cert, --client-key, and --ca-cert must all be supplied together".to_string(),
         ),
