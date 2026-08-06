@@ -48,7 +48,15 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
   `certify`.
 - `src/config.rs` — `config.toml` parse + flag→env→file→default resolution.
 - `src/credentials.rs` — per-tenant OIDC `id_token` cache.
+- `src/transport.rs` — process-wide
+  `clavenar.secure-transport-profile/v1` loader installed before every SDK and
+  direct-HTTP command path; profile reload is explicit and deny-unknown.
+- `src/device_authorization.rs` — bounded RFC 8628 device authorization and
+  polling used by `auth login --issuer`.
 - `tests/cli_integration.rs` — `assert_cmd` exit-code / stdout contract.
+- `tests/keycloak_device_authorization.rs` +
+  `scripts/run-keycloak-device-authorization.sh` — ignored real-provider
+  acceptance against the exact pinned Keycloak image.
 - `docs/SEQUENCES.md` — sequence diagrams for the primary subcommands.
 - `docs/clients/` — per-MCP-client `mcp-bridge` setup recipes.
 - `deny.toml` — supply-chain policy (advisories / licenses / bans / sources).
@@ -57,7 +65,6 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
 
 - **Formatting is an owning-CI gate.** Run `cargo fmt --all -- --check`
   before pushing Rust changes; CI runs it before check, test, and clippy.
-- After adding or updating a feature, also update the relevant `MANUAL_TESTS*` file(s) when needed.
 - **Exit codes are a wire contract** (spec §9.3), deterministic and
   machine-checkable: `0` success · `2` validation (bad args, 400/404/422) ·
   `3` auth/capability (401/403) · `4` conflict (409, already-in-desired-state) ·
@@ -73,6 +80,13 @@ After `cargo install --path .` the binary lands as `~/.cargo/bin/clavenarctl`.
   crate `config_dir()` (`~/.config/clavenar/credentials.json` on Linux).
   Tests/e2e override with `CLAVENAR_CREDENTIALS_PATH` — never touch the
   operator's real file from a test.
+- **One secure transport profile covers every network command.** The global
+  `--transport-profile` / `CLAVENAR_TRANSPORT_PROFILE` selects CA, client
+  identity, token source, deadlines, proxy policy, and reload behavior. Do not
+  let a direct HTTP command bypass the provider shared with `clavenar-sdk`.
+- **Device authorization is bounded RFC 8628.** Honor server polling intervals,
+  terminal denial/expiry, response caps, and the fixed least-privilege operator
+  scope. Keep manual token-file/stdin login only as the explicit offline path.
 - **`auth whoami` decodes JWT claims without verifying the signature** —
   display only. Server-side validation on every request stays authoritative.
 - **`pending decide <token>` is inspection-only.** It verifies and previews a
